@@ -4,7 +4,7 @@
 	gui program used to display jobs in the whole cluster
 	given username and node_range
 """
-import os, sys, pygtk, time, re
+import os, sys, pygtk, time, re, math
 pygtk.require('2.0')
 
 import gtk, gtk.glade
@@ -84,6 +84,50 @@ class node_process:
 		wl = ['sh', '-c', command]
 		os.spawnvp(os.P_WAIT, 'sh', wl)
 		print "process %s on node %s killed"%(pid, node_number)
+	
+	def submit_jobs(self, job_list, node_range, job_fprefix, job_starting_number):
+		"""
+		03-21-05
+			similar to codes in batch_haiyan_lam.py
+		"""
+		time_tuple = time.localtime()
+		time_to_run_jobs = "%s:%s"%(time_tuple[3], time_tuple[4]+2)
+		node2jobs = {}
+		for i in range(len(job_list)):
+			#remainder is the node_rank
+			index = int(math.fmod(i, len(node_range)))
+			node = node_range[index]
+			if job_list[i]:	#skip empty jobs
+				if node not in node2jobs:
+					node2jobs[node] = [job_list[i]]
+				else:
+					node2jobs[node].append(job_list[i])
+		for node in node2jobs:
+			#some nodes will be idle if there're more nodes than jobs
+			for job in node2jobs[node]:
+				job_fname = os.path.join(os.path.expanduser('~'), 'qjob/%s%s.sh'%(job_fprefix,job_starting_number))
+				job_f = open(job_fname, 'w')
+				job_f.write('date\n')	#the beginning time
+				jobrow = 'ssh node%s %s'%(node, job)
+				job_f.write('echo %s\n'%jobrow)	#print the commandline
+				job_f.write("%s\n"%jobrow)	#command here
+				job_f.write('date\n')	#the ending time
+				#close the file
+				job_f.close()
+				
+				print "node: %s, at %s, job: %s"%(node, time_to_run_jobs, job)
+				#schedule it
+				#wl = ['at', '-mf', job_fname, time_to_run_jobs]	#-m, even if no output, mail me.
+				#os.spawnvp(os.P_WAIT, 'at', wl)
+				
+				#schedule it on node16 to get mail notification
+				node16_jobrow = 'ssh node16 at -mf %s %s'%(job_fname, time_to_run_jobs)
+				wl = ['sh', '-c', node16_jobrow]
+				os.spawnvp(os.P_WAIT, 'sh', wl)
+				
+				job_starting_number+=1
+		return job_starting_number
+		
 
 def foreach_cb(model, path, iter, pathlist):
 	"""
@@ -110,6 +154,18 @@ class grid_job_mgr:
 		self.ps_command = 'ps'
 		self.tmp_fname = '/tmp/%sjobs'%(time.time())
 		
+		#the job submission dialog
+		self.dialog_submit = xml.get_widget("dialog_submit")
+		self.dialog_submit.hide()
+		#how to handle the close window action?
+		#self.dialog_submit.connect("delete_event", self.dialog_submit_hide)
+		#self.dialog_submit.connect("destroy", self.on_cancelbutton_submit_clicked)
+		self.entry_node_range_submit = xml.get_widget("entry_node_range_submit")
+		self.textview_submit = xml.get_widget("textview_submit")
+		self.entry_job_starting_number = xml.get_widget("entry_job_starting_number")
+		self.job_starting_number = 0
+		self.job_fprefix = 'grid_job_mgr'
+		
 		self.node_process_instance = node_process()	#the backend class
 		self.no_of_refreshes = 0
 		self.tvcolumn_dict = {}
@@ -133,15 +189,7 @@ class grid_job_mgr:
 			--create_columns()	on first refresh
 		"""
 		username = self.entry_username.get_text()
-		real_node_range = []
-		node_range = self.entry_node_range.get_text().split(',')
-		for nodes in node_range:
-			nodes = nodes.split('-')
-			nodes = map(int, nodes)
-			if len(nodes)==2:
-				real_node_range += range(nodes[0], nodes[1]+1)
-			else:
-				real_node_range += nodes
+		real_node_range = self.parse_node_range(self.entry_node_range.get_text())
 		node2ps = self.node_process_instance.get_processes(real_node_range, self.ps_command, username, self.tmp_fname)
 		
 		if node2ps=={}:
@@ -214,7 +262,60 @@ class grid_job_mgr:
 			sys.stderr.write("Have you selected processes?\n")
 		
 	def on_button_submit_clicked(self, button_submit):
-		print "new job submitted"
+		"""
+		03-21-05
+			open a dialog to submit jobs
+		"""
+		self.entry_job_starting_number.set_text(repr(self.job_starting_number))
+		self.dialog_submit.show()
+		
+	def on_okbutton_submit_clicked(self, okbutton_submit):
+		"""
+		03-21-05
+			call node_process_instance to submit jobs
+		"""
+		node_range = self.entry_node_range_submit.get_text()
+		if node_range:
+			node_range = self.parse_node_range(node_range)
+		else:
+			sys.stderr.write("Which nodes to run these jobs?\n")
+			return
+		self.job_starting_number = self.entry_job_starting_number.get_text()
+		if self.job_starting_number:
+			self.job_starting_number = int(self.job_starting_number)
+		else:
+			sys.stderr.write("What's the job_starting_number?\n")
+			return
+		textbuffer = self.textview_submit.get_buffer()
+		startiter, enditer = textbuffer.get_bounds()
+		text  = textbuffer.get_text(startiter, enditer)
+		job_list = text.split("\n")
+		self.job_starting_number = self.node_process_instance.submit_jobs(job_list, \
+			node_range, self.job_fprefix, self.job_starting_number)
+		self.dialog_submit.hide()
+		
+	def on_cancelbutton_submit_clicked(self, cancelbutton_submit):
+		self.dialog_submit.hide()
+		
+	def dialog_submit_hide(self, widget, event, data=None):
+		self.dialog_submit.hide()
+	
+	def parse_node_range(self, node_range):
+		"""
+		03-21-05
+			input: node_range i.e. 1-3,5,8-10
+			output: real_node_range, i.e. [1,2,3,5,8,9,10]
+		"""
+		real_node_range = []
+		node_range = node_range.split(',')
+		for nodes in node_range:
+			nodes = nodes.split('-')
+			nodes = map(int, nodes)
+			if len(nodes)==2:
+				real_node_range += range(nodes[0], nodes[1]+1)
+			else:
+				real_node_range += nodes
+		return real_node_range
 		
 	def destroy(self, widget):
 		if os.path.isfile(self.tmp_fname):
