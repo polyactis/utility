@@ -159,7 +159,7 @@ class grid_job_mgr:
 		self.dialog_submit = xml.get_widget("dialog_submit")
 		self.dialog_submit.hide()
 		#how to handle the close window action?
-		#self.dialog_submit.connect("delete_event", self.dialog_submit_hide)
+		self.dialog_submit.connect("delete_event", self.dialog_submit_hide)
 		#self.dialog_submit.connect("destroy", self.on_cancelbutton_submit_clicked)
 		self.entry_node_range_submit = xml.get_widget("entry_node_range_submit")
 		self.textview_submit = xml.get_widget("textview_submit")
@@ -297,9 +297,11 @@ class grid_job_mgr:
 		
 	def on_cancelbutton_submit_clicked(self, cancelbutton_submit):
 		self.dialog_submit.hide()
+		return True
 		
 	def dialog_submit_hide(self, widget, event, data=None):
-		self.dialog_submit.hide()
+		widget.hide()
+		return True
 	
 	def parse_node_range(self, node_range):
 		"""
