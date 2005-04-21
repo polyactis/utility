@@ -117,14 +117,15 @@ class node_process:
 				
 				print "node: %s, at %s, job: %s"%(node, time_to_run_jobs, job)
 				#schedule it
-				wl = ['at', '-mf', job_fname, time_to_run_jobs]	#-m, even if no output, mail me.
-				os.spawnvp(os.P_WAIT, 'at', wl)
+				#wl = ['at', '-mf', job_fname, time_to_run_jobs]	#-m, even if no output, mail me.
+				#os.spawnvp(os.P_WAIT, 'at', wl)
 				
 				####04-03-05  Drake enabled the mailing of 'at' on app2 to work. So back to the above usage.
+				###04-20-05 app2 is vulnerable to reboot. safer to use node16.
 				#schedule it on node16 to get mail notification
-				#node16_jobrow = 'ssh node16 at -mf %s %s'%(job_fname, time_to_run_jobs)
-				#wl = ['sh', '-c', node16_jobrow]
-				#os.spawnvp(os.P_WAIT, 'sh', wl)
+				node16_jobrow = 'ssh node16 at -mf %s %s'%(job_fname, time_to_run_jobs)
+				wl = ['sh', '-c', node16_jobrow]
+				os.spawnvp(os.P_WAIT, 'sh', wl)
 				
 				job_starting_number+=1
 		return job_starting_number
