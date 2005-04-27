@@ -108,9 +108,10 @@ class node_process:
 				job_fname = os.path.join(os.path.expanduser('~'), 'qjob/%s%s.sh'%(job_fprefix,job_starting_number))
 				job_f = open(job_fname, 'w')
 				job_f.write('date\n')	#the beginning time
-				jobrow = 'ssh node%s %s'%(node, job)
-				job_f.write('echo %s\n'%jobrow)	#print the commandline
-				job_f.write("%s\n"%jobrow)	#command here
+				for sub_job in job.split(';'):	#04-25-05	submit multiple commands on one line
+					jobrow = 'ssh node%s %s'%(node, sub_job)
+					job_f.write('echo %s\n'%jobrow)	#print the commandline
+					job_f.write("%s\n"%jobrow)	#command here
 				job_f.write('date\n')	#the ending time
 				#close the file
 				job_f.close()
