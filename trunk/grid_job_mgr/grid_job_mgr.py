@@ -89,6 +89,9 @@ class node_process:
 		"""
 		03-21-05
 			similar to codes in batch_haiyan_lam.py
+		05-14-05
+			correct the bug to submit sequential jobs, which are on the same line seperated by ';'
+			see log_05 for detail.
 		"""
 		time_tuple = time.localtime()
 		time_to_run_jobs = "%s:%s"%(time_tuple[3], time_tuple[4]+2)
@@ -124,9 +127,10 @@ class node_process:
 				####04-03-05  Drake enabled the mailing of 'at' on app2 to work. So back to the above usage.
 				###04-20-05 app2 is vulnerable to reboot. safer to use node16.
 				#schedule it on node16 to get mail notification
-				node16_jobrow = 'ssh node16 at -mf %s %s'%(job_fname, time_to_run_jobs)
-				wl = ['sh', '-c', node16_jobrow]
-				os.spawnvp(os.P_WAIT, 'sh', wl)
+				node16_jobrow = 'ssh node16 "echo sh %s | at -m %s"'%(job_fname, time_to_run_jobs)	#05-15-05, see log_05
+				os.system(node16_jobrow)	#use os.system. 05-15-05
+				#wl = ['sh', '-c', node16_jobrow]
+				#os.spawnvp(os.P_WAIT, 'sh', wl)
 				
 				job_starting_number+=1
 		return job_starting_number
