@@ -85,7 +85,7 @@ class node_process:
 		os.spawnvp(os.P_WAIT, 'sh', wl)
 		print "process %s on node %s killed"%(pid, node_number)
 	
-	def submit_jobs(self, job_list, node_range, job_fprefix, job_starting_number):
+	def submit_jobs(self, job_list, node_range, job_fprefix, job_starting_number, time_to_run_jobs):
 		"""
 		03-21-05
 			similar to codes in batch_haiyan_lam.py
@@ -93,8 +93,9 @@ class node_process:
 			correct the bug to submit sequential jobs, which are on the same line seperated by ';'
 			see log_05 for detail.
 		"""
-		time_tuple = time.localtime()
-		time_to_run_jobs = "%s:%s"%(time_tuple[3], time_tuple[4]+2)
+		if not time_to_run_jobs:
+			time_tuple = time.localtime()
+			time_to_run_jobs = "%s:%s"%(time_tuple[3], time_tuple[4]+2)
 		node2jobs = {}
 		for i in range(len(job_list)):
 			#remainder is the node_rank
@@ -170,6 +171,7 @@ class grid_job_mgr:
 		self.entry_node_range_submit = xml.get_widget("entry_node_range_submit")
 		self.textview_submit = xml.get_widget("textview_submit")
 		self.entry_job_starting_number = xml.get_widget("entry_job_starting_number")
+		self.entry_time = xml.get_widget("entry_time")
 		self.job_starting_number = 0
 		self.job_fprefix = 'grid_job_mgr'
 		
@@ -293,12 +295,13 @@ class grid_job_mgr:
 		else:
 			sys.stderr.write("What's the job_starting_number?\n")
 			return
+		time_to_run_jobs = self.entry_time.get_text()
 		textbuffer = self.textview_submit.get_buffer()
 		startiter, enditer = textbuffer.get_bounds()
 		text  = textbuffer.get_text(startiter, enditer)
 		job_list = text.split("\n")
 		self.job_starting_number = self.node_process_instance.submit_jobs(job_list, \
-			node_range, self.job_fprefix, self.job_starting_number)
+			node_range, self.job_fprefix, self.job_starting_number, time_to_run_jobs)
 		self.dialog_submit.hide()
 		
 	def on_cancelbutton_submit_clicked(self, cancelbutton_submit):
