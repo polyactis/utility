@@ -110,6 +110,11 @@ class node_process:
 			#some nodes will be idle if there're more nodes than jobs
 			for job in node2jobs[node]:
 				job_fname = os.path.join(os.path.expanduser('~'), 'qjob/%s%s.sh'%(job_fprefix,job_starting_number))
+				if os.path.isfile(job_fname):
+					user_input = raw_input("File %s already exists, continue(y/N):"%job_fname)
+					if user_input != 'y':
+						print "job: %s not submitted"%job
+						return job_starting_number
 				job_f = open(job_fname, 'w')
 				job_f.write('date\n')	#the beginning time
 				for sub_job in job.split(';'):	#04-25-05	submit multiple commands on one line
@@ -171,7 +176,8 @@ class grid_job_mgr:
 		self.entry_node_range_submit = xml.get_widget("entry_node_range_submit")
 		self.textview_submit = xml.get_widget("textview_submit")
 		self.entry_job_starting_number = xml.get_widget("entry_job_starting_number")
-		self.entry_time = xml.get_widget("entry_time")
+		self.entry_time = xml.get_widget("entry_time")	#05-22-05
+		self.entry_job_name_prefix = xml.get_widget("entry_job_name_prefix")	#05-22-05
 		self.job_starting_number = 0
 		self.job_fprefix = 'grid_job_mgr'
 		
@@ -282,6 +288,7 @@ class grid_job_mgr:
 		"""
 		03-21-05
 			call node_process_instance to submit jobs
+		05-22-05
 		"""
 		node_range = self.entry_node_range_submit.get_text()
 		if node_range:
@@ -295,13 +302,17 @@ class grid_job_mgr:
 		else:
 			sys.stderr.write("What's the job_starting_number?\n")
 			return
-		time_to_run_jobs = self.entry_time.get_text()
+		time_to_run_jobs = self.entry_time.get_text()	#05-22-05
+		job_name_prefix = self.entry_job_name_prefix.get_text()	#05-22-05
 		textbuffer = self.textview_submit.get_buffer()
 		startiter, enditer = textbuffer.get_bounds()
 		text  = textbuffer.get_text(startiter, enditer)
 		job_list = text.split("\n")
+		if not job_name_prefix:
+			job_name_prefix = self.job_fprefix
+		
 		self.job_starting_number = self.node_process_instance.submit_jobs(job_list, \
-			node_range, self.job_fprefix, self.job_starting_number, time_to_run_jobs)
+			node_range, job_name_prefix, self.job_starting_number, time_to_run_jobs)
 		self.dialog_submit.hide()
 		
 	def on_cancelbutton_submit_clicked(self, cancelbutton_submit):
