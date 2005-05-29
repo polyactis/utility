@@ -85,13 +85,16 @@ class node_process:
 		os.spawnvp(os.P_WAIT, 'sh', wl)
 		print "process %s on node %s killed"%(pid, node_number)
 	
-	def submit_jobs(self, job_list, node_range, job_fprefix, job_starting_number, time_to_run_jobs):
+	def submit_jobs(self, job_list, node_range, job_fprefix, job_starting_number, time_to_run_jobs, \
+		submit_option, no_of_nodes):
 		"""
 		03-21-05
 			similar to codes in batch_haiyan_lam.py
 		05-14-05
 			correct the bug to submit sequential jobs, which are on the same line seperated by ';'
 			see log_05 for detail.
+		05-29-05
+			add submit_option and no_of_nodes
 		"""
 		if not time_to_run_jobs:
 			time_tuple = time.localtime()
@@ -116,6 +119,8 @@ class node_process:
 						print "job: %s not submitted"%job
 						return job_starting_number
 				job_f = open(job_fname, 'w')
+				job_f.write("#!/bin/sh\n")
+				job_f.write("#$ -pe mpich %s\n"%no_of_nodes)
 				job_f.write('date\n')	#the beginning time
 				for sub_job in job.split(';'):	#04-25-05	submit multiple commands on one line
 					jobrow = 'ssh node%s %s'%(node, sub_job)
@@ -126,18 +131,15 @@ class node_process:
 				job_f.close()
 				
 				print "node: %s, at %s, job: %s"%(node, time_to_run_jobs, job)
-				#schedule it
-				#wl = ['at', '-mf', job_fname, time_to_run_jobs]	#-m, even if no output, mail me.
-				#os.spawnvp(os.P_WAIT, 'at', wl)
-				
-				####04-03-05  Drake enabled the mailing of 'at' on app2 to work. So back to the above usage.
-				###04-20-05 app2 is vulnerable to reboot. safer to use node16.
-				#schedule it on node16 to get mail notification
-				node16_jobrow = 'ssh node16 "echo sh %s | at -m %s"'%(job_fname, time_to_run_jobs)	#05-15-05, see log_05
-				os.system(node16_jobrow)	#use os.system. 05-15-05
-				#wl = ['sh', '-c', node16_jobrow]
-				#os.spawnvp(os.P_WAIT, 'sh', wl)
-				
+				if submit_option == 1:
+					jobrow = "echo qsub -@ .qsub.options %s | at -m %s"%(job_fname, time_to_run_jobs)	#05-29-05
+					os.system(jobrow)	#direct qsub doesn't work, so has to use at.
+				elif submit_option == 2:
+					jobrow = "echo sh %s | at -m %s"%(job_fname, time_to_run_jobs)
+					os.system(jobrow)
+				elif submit_option == 3:
+					jobrow = 'ssh node16 "echo sh %s | at -m %s"'%(job_fname, time_to_run_jobs)
+					os.system(jobrow)				
 				job_starting_number+=1
 		return job_starting_number
 		
@@ -152,6 +154,10 @@ def foreach_cb(model, path, iter, pathlist):
 
 class grid_job_mgr:
 	def __init__(self):
+		"""
+		05-29-05
+			add submit_option and no_of_nodes
+		"""
 		xml = gtk.glade.XML('grid_job_mgr.glade')
 		xml.signal_autoconnect(self)
 		self.window1 = xml.get_widget("window1")
@@ -178,8 +184,21 @@ class grid_job_mgr:
 		self.entry_job_starting_number = xml.get_widget("entry_job_starting_number")
 		self.entry_time = xml.get_widget("entry_time")	#05-22-05
 		self.entry_job_name_prefix = xml.get_widget("entry_job_name_prefix")	#05-22-05
+		
+		self.radiobutton_qsub = xml.get_widget("radiobutton_qsub")	#05-29-05
+		self.radiobutton_qsub.connect("toggled", self.on_radiobutton_submit_toggled, "radiobutton_qsub")
+		self.radiobutton_at = xml.get_widget("radiobutton_at")	#05-29-05
+		self.radiobutton_at.connect("toggled", self.on_radiobutton_submit_toggled, "radiobutton_at")
+		self.radiobutton_at16 = xml.get_widget("radiobutton_at16")	#05-29-05
+		self.radiobutton_at16.connect("toggled", self.on_radiobutton_submit_toggled, "radiobutton_at16")
+		self.entry_no_of_nodes = xml.get_widget("entry_no_of_nodes")	#05-29-05
+		
 		self.job_starting_number = 0
 		self.job_fprefix = 'grid_job_mgr'
+		self.submit_option = 1	#05-29-05	default is 1(qsub), changed in on_radiobutton_qsub_toggled()
+		self.submit_option_dict = {'radiobutton_qsub':1,
+			'radiobutton_at':2,
+			'radiobutton_at16':3}	#05-29-05	which option to take.
 		
 		self.node_process_instance = node_process()	#the backend class
 		self.no_of_refreshes = 0
@@ -289,6 +308,9 @@ class grid_job_mgr:
 		03-21-05
 			call node_process_instance to submit jobs
 		05-22-05
+		
+		05-29-05
+			add submit_option and no_of_nodes
 		"""
 		node_range = self.entry_node_range_submit.get_text()
 		if node_range:
@@ -304,6 +326,9 @@ class grid_job_mgr:
 			return
 		time_to_run_jobs = self.entry_time.get_text()	#05-22-05
 		job_name_prefix = self.entry_job_name_prefix.get_text()	#05-22-05
+		no_of_nodes = self.entry_no_of_nodes.get_text()	#05-29-95
+		no_of_nodes = int(no_of_nodes)
+		
 		textbuffer = self.textview_submit.get_buffer()
 		startiter, enditer = textbuffer.get_bounds()
 		text  = textbuffer.get_text(startiter, enditer)
@@ -312,7 +337,8 @@ class grid_job_mgr:
 			job_name_prefix = self.job_fprefix
 		
 		self.job_starting_number = self.node_process_instance.submit_jobs(job_list, \
-			node_range, job_name_prefix, self.job_starting_number, time_to_run_jobs)
+			node_range, job_name_prefix, self.job_starting_number, time_to_run_jobs, \
+			self.submit_option, no_of_nodes)
 		self.dialog_submit.hide()
 		
 	def on_cancelbutton_submit_clicked(self, cancelbutton_submit):
@@ -347,6 +373,14 @@ class grid_job_mgr:
 			except:
 				sys.stderr.write("Error while removing %s.\n"%self.tmp_fname)
 		gtk.main_quit()
+	
+	def on_radiobutton_submit_toggled(self, widget, data=None):
+		"""
+		05-29-05
+		"""
+		if widget.get_active() == 1:	#only change self.submit_option to the active radiobutton
+			self.submit_option = self.submit_option_dict[data]
+		
 
 instance = grid_job_mgr()
 gtk.main()
