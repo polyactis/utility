@@ -123,7 +123,11 @@ class node_process:
 				job_f.write("#$ -pe mpich %s\n"%no_of_nodes)
 				job_f.write('date\n')	#the beginning time
 				for sub_job in job.split(';'):	#04-25-05	submit multiple commands on one line
-					jobrow = 'ssh node%s %s'%(node, sub_job)
+					if submit_option==1:
+						#'qsub' doesn't need to specify the nodes	06-01-05
+						jobrow = '%s'%(sub_job)
+					else:
+						jobrow = 'ssh node%s %s'%(node, sub_job)
 					job_f.write('echo %s\n'%jobrow)	#print the commandline
 					job_f.write("%s\n"%jobrow)	#command here
 				job_f.write('date\n')	#the ending time
@@ -132,7 +136,7 @@ class node_process:
 				
 				print "node: %s, at %s, job: %s"%(node, time_to_run_jobs, job)
 				if submit_option == 1:
-					jobrow = "echo qsub -@ .qsub.options %s | at -m %s"%(job_fname, time_to_run_jobs)	#05-29-05
+					jobrow = "echo qsub -@ ~/.qsub.options %s | at -m %s"%(job_fname, time_to_run_jobs)	#05-29-05
 					os.system(jobrow)	#direct qsub doesn't work, so has to use at.
 				elif submit_option == 2:
 					jobrow = "echo sh %s | at -m %s"%(job_fname, time_to_run_jobs)
