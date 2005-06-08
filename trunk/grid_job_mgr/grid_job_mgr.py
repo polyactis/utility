@@ -86,7 +86,7 @@ class node_process:
 		print "process %s on node %s killed"%(pid, node_number)
 	
 	def submit_jobs(self, job_list, node_range, job_fprefix, job_starting_number, time_to_run_jobs, \
-		submit_option, no_of_nodes):
+		submit_option, no_of_nodes, qsub_option):
 		"""
 		03-21-05
 			similar to codes in batch_haiyan_lam.py
@@ -95,6 +95,8 @@ class node_process:
 			see log_05 for detail.
 		05-29-05
 			add submit_option and no_of_nodes
+		06-07-05
+			add qsub_option
 		"""
 		if not time_to_run_jobs:
 			time_tuple = time.localtime()
@@ -120,6 +122,10 @@ class node_process:
 						return job_starting_number
 				job_f = open(job_fname, 'w')
 				job_f.write("#!/bin/sh\n")
+				
+				#06-07-05	qsub_option
+				job_f.write('#$ %s\n'%qsub_option)
+				
 				if no_of_nodes>1:
 					job_f.write("#$ -pe mpich %s\n"%no_of_nodes)	#06-02-05	Parallel job needs >1 nodes.
 				job_f.write('date\n')	#the beginning time
@@ -189,6 +195,7 @@ class grid_job_mgr:
 		self.entry_job_starting_number = xml.get_widget("entry_job_starting_number")
 		self.entry_time = xml.get_widget("entry_time")	#05-22-05
 		self.entry_job_name_prefix = xml.get_widget("entry_job_name_prefix")	#05-22-05
+		self.entry_qsub_option = xml.get_widget("entry_qsub_option")	#06-07-05
 		
 		self.radiobutton_qsub = xml.get_widget("radiobutton_qsub")	#05-29-05
 		self.radiobutton_qsub.connect("toggled", self.on_radiobutton_submit_toggled, "radiobutton_qsub")
@@ -316,6 +323,8 @@ class grid_job_mgr:
 		
 		05-29-05
 			add submit_option and no_of_nodes
+		06-07-05
+			add qsub_option
 		"""
 		node_range = self.entry_node_range_submit.get_text()
 		if node_range:
@@ -333,6 +342,7 @@ class grid_job_mgr:
 		job_name_prefix = self.entry_job_name_prefix.get_text()	#05-22-05
 		no_of_nodes = self.entry_no_of_nodes.get_text()	#05-29-95
 		no_of_nodes = int(no_of_nodes)
+		qsub_option = self.entry_qsub_option.get_text()	#06-07-05
 		
 		textbuffer = self.textview_submit.get_buffer()
 		startiter, enditer = textbuffer.get_bounds()
@@ -343,7 +353,7 @@ class grid_job_mgr:
 		
 		self.job_starting_number = self.node_process_instance.submit_jobs(job_list, \
 			node_range, job_name_prefix, self.job_starting_number, time_to_run_jobs, \
-			self.submit_option, no_of_nodes)
+			self.submit_option, no_of_nodes, qsub_option)
 		self.dialog_submit.hide()
 		
 	def on_cancelbutton_submit_clicked(self, cancelbutton_submit):
