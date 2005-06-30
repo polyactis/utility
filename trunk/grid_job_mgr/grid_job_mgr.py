@@ -85,7 +85,7 @@ class node_process:
 		os.spawnvp(os.P_WAIT, 'sh', wl)
 		print "process %s on node %s killed"%(pid, node_number)
 	
-	def submit_jobs(self, job_list, node_range, job_fprefix, job_starting_number, time_to_run_jobs, \
+	def submit_jobs(self, job_list, node_range, job_fprefix, job_starting_number, time_to_run, \
 		submit_option, no_of_nodes, qsub_option):
 		"""
 		03-21-05
@@ -97,10 +97,15 @@ class node_process:
 			add submit_option and no_of_nodes
 		06-07-05
 			add qsub_option
+		06-24-05
+			if user specified time_to_run, then schedule it to qsub
 		"""
-		if not time_to_run_jobs:
+		if not time_to_run:
 			time_tuple = time.localtime()
 			time_to_run_jobs = "%s:%s"%(time_tuple[3], time_tuple[4]+2)
+		else:
+			time_to_run_jobs = time_to_run
+
 		node2jobs = {}
 		for i in range(len(job_list)):
 			#remainder is the node_rank
@@ -143,7 +148,10 @@ class node_process:
 				
 				print "node: %s, at %s, job: %s"%(node, time_to_run_jobs, job)
 				if submit_option == 1:
-					jobrow = "qsub -@ ~/.qsub.options %s"%(job_fname)	#05-29-05
+					if time_to_run:
+						jobrow = "echo qsub -@ ~/.qsub.options %s | at -m %s"%(job_fname, time_to_run)	#06-24-05 if user specified time_to_run, then schedule it to qsub
+					else:
+						jobrow = "qsub -@ ~/.qsub.options %s"%(job_fname)	#05-29-05
 					os.system(jobrow)	#direct qsub doesn't work, so has to use at.
 				elif submit_option == 2:
 					jobrow = "echo sh %s | at -m %s"%(job_fname, time_to_run_jobs)
