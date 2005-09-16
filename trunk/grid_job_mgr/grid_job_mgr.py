@@ -79,11 +79,20 @@ class node_process:
 	
 	def kill_process(self, node_number, pid):
 		"""
+		09-16-05
+			use the exit_code to judge if successful or not
 		"""
-		command = 'ssh node%s kill  -term %s'%(node_number, pid)
+		command = 'ssh node%s kill  -15 %s'%(node_number, pid)
+		exit_code = os.system(command)
+		if exit_code==0:
+			print "process %s on node %s killed"%(pid, node_number)
+		else:
+			print "Failed to kill process %s on node %s"%(pid, node_number)
+		"""
 		wl = ['sh', '-c', command]
 		os.spawnvp(os.P_WAIT, 'sh', wl)
 		print "process %s on node %s killed"%(pid, node_number)
+		"""
 	
 	def submit_jobs(self, job_list, node_range, job_fprefix, job_starting_number, time_to_run, \
 		submit_option, no_of_nodes, qsub_option):
