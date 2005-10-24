@@ -29,17 +29,21 @@ class node_process:
 		self.re_pid = re.compile(r'^\ *(\d+)\ ')	#to catch the pid(first group)
 	
 	def get_processes(self, node_range, ps_command, username, outputfile):
+		"""
+		10-23-05
+			don't insert 'node' before item in node_range
+		"""
 		sys.stderr.write("Getting process information for %s...\n"%(username))
 		node2ps = {}
 		for node in node_range:
-			print "node%s"%node
+			print "%s"%node
 			#first execute
 			ps_option = '-o pid,ppid,pcpu,pmem,stime,stat,time -U %s'%username
-			command = 'ssh node%s %s %s > %s'%(node, ps_command, ps_option, outputfile)
+			command = 'ssh %s %s %s > %s'%(node, ps_command, ps_option, outputfile)
 			wl = ['sh', '-c', command]
 			return_code = os.spawnvp(os.P_WAIT, 'sh', wl)
 			if return_code!=0:	#normal exit code for ssh is 0
-				sys.stderr.write("node%s sh -c ssh error code:%s, ignore.\n"%(node, return_code))
+				sys.stderr.write("%s sh -c ssh error code:%s, ignore.\n"%(node, return_code))
 				continue
 			node2ps[node] = node_process_data()	#initialize the data stu
 			#first parse
@@ -59,7 +63,7 @@ class node_process:
 			
 			#second execute
 			ps_option = '-o pid,cmd -U %s'%username
-			command = 'ssh node%s %s %s > %s'%(node, ps_command, ps_option, outputfile)
+			command = 'ssh %s %s %s > %s'%(node, ps_command, ps_option, outputfile)
 			wl = ['sh', '-c', command]
 			os.spawnvp(os.P_WAIT, 'sh', wl)
 			#second parse
@@ -81,8 +85,10 @@ class node_process:
 		"""
 		09-16-05
 			use the exit_code to judge if successful or not
+		10-23-05
+			remove 'node' before the number
 		"""
-		command = 'ssh node%s kill  -15 %s'%(node_number, pid)
+		command = 'ssh %s kill  -15 %s'%(node_number, pid)
 		exit_code = os.system(command)
 		if exit_code==0:
 			print "process %s on node %s killed"%(pid, node_number)
@@ -108,6 +114,8 @@ class node_process:
 			add qsub_option
 		06-24-05
 			if user specified time_to_run, then schedule it to qsub
+		10-23-05
+			'node' before number is removed.
 		"""
 		if not time_to_run:
 			time_tuple = time.localtime()
@@ -148,7 +156,7 @@ class node_process:
 						#'qsub' doesn't need to specify the nodes	06-01-05
 						jobrow = '%s'%(sub_job)
 					else:
-						jobrow = 'ssh node%s %s'%(node, sub_job)
+						jobrow = 'ssh %s %s'%(node, sub_job)
 					job_f.write('echo %s\n'%jobrow)	#print the commandline
 					job_f.write("%s\n"%jobrow)	#command here
 				job_f.write('date\n')	#the ending time
@@ -386,16 +394,23 @@ class grid_job_mgr:
 		03-21-05
 			input: node_range i.e. 1-3,5,8-10
 			output: real_node_range, i.e. [1,2,3,5,8,9,10]
+		10-23-05
+			handle the situation to include nodes like app2, app1, ..
 		"""
+		number_p = re.compile(r'^\d')	#10-23-05
+		node_functor = lambda x: 'node'+str(x)	#prepend 'node' before a number
 		real_node_range = []
 		node_range = node_range.split(',')
 		for nodes in node_range:
-			nodes = nodes.split('-')
-			nodes = map(int, nodes)
-			if len(nodes)==2:
-				real_node_range += range(nodes[0], nodes[1]+1)
-			else:
+			if number_p.match(nodes):	#10-23-05
+				nodes = nodes.split('-')
+				nodes = map(int, nodes)
+				if len(nodes)==2:
+					nodes = range(nodes[0], nodes[1]+1)
+				nodes = map(node_functor, nodes)
 				real_node_range += nodes
+			else:
+				real_node_range.append(nodes)
 		return real_node_range
 		
 	def destroy(self, widget):
