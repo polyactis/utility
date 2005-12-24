@@ -4,7 +4,7 @@
 	A text-ui counterpart of grid_job_mgr.py.
 """
 
-import os, sys
+import os, sys, time
 import urwid.curses_display
 import urwid
 
@@ -79,7 +79,7 @@ class SubmitJobUrwid:
 		
 		self.listbox = urwid.ListBox( self.items )
 		
-		instruct = urwid.Text("Job submission program based on Urwid. F9 to submit, F8 to quit.")
+		instruct = urwid.Text("Job submission program based on Urwid. F8 to submit, F12 to quit.")
 		header = urwid.AttrWrap( instruct, 'header' )
 		
 		self.footer_text = urwid.Text("Dec 23rd, 2005 by Yu Huang")
@@ -106,9 +106,9 @@ class SubmitJobUrwid:
 				if k == "window resize":
 					size = self.ui.get_cols_rows()
 					continue
-				elif k == 'f9':
-					self.submit_jobs()
 				elif k == 'f8':
+					self.submit_jobs()
+				elif k == 'f12':
 					return	#break is not enough
 				self.top_frame.keypress( size, k )
 	
@@ -125,8 +125,7 @@ class SubmitJobUrwid:
 				current_job_number = int(self.jobnumber_edit.get_edit_text())
 				current_job_number += 1
 				self.jobnumber_edit.set_edit_text('%s'%current_job_number)
-				self.footer_text.set_text("Submitted: %s"%qsub_output_stdout)
-			
+				self.footer_text.set_text("Submitted: %s"%qsub_output_stdout)			
 	
 	def submit_single_job(self, single_job):
 		"""
