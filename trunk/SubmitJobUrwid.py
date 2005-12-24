@@ -26,7 +26,7 @@ class SubmitJobUrwid:
 		]
 	
 	def __init__(self):
-		self.walltime_edit = urwid.Edit( ('editcp',"walltime="), "48:00:00" )
+		self.walltime_edit = urwid.Edit( ('editcp',"walltime="), "200:00:00" )
 		self.nodes_edit = urwid.IntEdit( ('editcp', "nodes="), 0 )
 		self.myri_ppn_edit = urwid.IntEdit( ('editcp', "myri:ppn="), 4)
 		self.workdir_edit = urwid.Edit( ("editcp",  "WORKDIR(-d) "), '/home/rcf-14/yuhuang/qjob_output')
