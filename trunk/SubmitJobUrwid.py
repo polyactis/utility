@@ -33,6 +33,7 @@ class SubmitJobUrwid:
 		self.other_options_edit = urwid.Edit( ("editcp", "others:"), '-q cmb -j oe -S /bin/bash')
 		self.source_bash_profile_checkbox = urwid.CheckBox("source ~/.bash_profile")
 		self.source_bash_profile_checkbox.set_state(True)
+		self.just_write_down_checkbox = urwid.CheckBox("Write jobfile. No submission.")
 		self.jobname_prefix_edit = urwid.Edit( ("editcp", "jobname_prefix:"), '~/qjob/job')
 		self.jobnumber_edit = urwid.IntEdit( ("editcp", "job number:"), 0)
 		self.job_edit = urwid.Edit( ('editcp',"Commands here:"), multiline=True )
@@ -55,7 +56,12 @@ class SubmitJobUrwid:
 			urwid.AttrWrap( self.other_options_edit, 'editbx', 'editfc' ), ('fixed left',2), ('fixed right',2)),
 		blank,
 		urwid.Padding(
-			urwid.AttrWrap( self.source_bash_profile_checkbox, 'buttn','buttnf'),
+			urwid.Columns(
+				[
+				urwid.AttrWrap( self.source_bash_profile_checkbox, 'buttn','buttnf'),
+				urwid.AttrWrap( self.just_write_down_checkbox, 'buttn', 'buttnf'),
+				],
+				2),
 			('fixed left',2), ('fixed right',2)),
 		blank,
 		urwid.Padding(
@@ -114,18 +120,19 @@ class SubmitJobUrwid:
 	
 	def submit_jobs(self):
 		jobs = self.job_edit.get_edit_text()
-		job_list = jobs.split('\n')
-		for single_job in job_list:
-			qsub_output = self.submit_single_job(single_job)
-			qsub_output_stdout = qsub_output[1].read().replace('\n', ' ')
-			qsub_output_stderr = qsub_output[2].read().replace('\n', ' ')
-			if qsub_output_stderr:
-				self.footer_text.set_text(('header', "Failed: %s"%qsub_output_stderr))
-			else:
-				current_job_number = int(self.jobnumber_edit.get_edit_text())
-				current_job_number += 1
-				self.jobnumber_edit.set_edit_text('%s'%current_job_number)
-				self.footer_text.set_text("Submitted: %s"%qsub_output_stdout)			
+		if jobs:
+			job_list = jobs.split('\n')
+			for single_job in job_list:
+				qsub_output_stdout, qsub_output_stderr = self.submit_single_job(single_job)
+				if qsub_output_stderr:
+					self.footer_text.set_text(('header', "Failed: %s"%qsub_output_stderr))
+				else:
+					current_job_number = int(self.jobnumber_edit.get_edit_text())
+					current_job_number += 1
+					self.jobnumber_edit.set_edit_text('%s'%current_job_number)
+					self.footer_text.set_text("%s"%qsub_output_stdout)
+		else:
+			self.footer_text.set_text(('header', "Empty job!!"))
 	
 	def submit_single_job(self, single_job):
 		"""
@@ -157,7 +164,15 @@ class SubmitJobUrwid:
 			jobf.write("date\n")
 		jobf.close()
 		
-		return os.popen3('qsub %s'%job_name)
+		qsub_output_stdout = ''
+		qsub_output_stderr = ''
+		if self.just_write_down_checkbox.get_state():
+			qsub_output_stdout = '%s written.'%job_name
+		else:
+			qsub_output = os.popen3('qsub %s'%job_name)
+			qsub_output_stdout = qsub_output[1].read().replace('\n', ' ')
+			qsub_output_stderr = qsub_output[2].read().replace('\n', ' ')		
+		return  (qsub_output_stdout, qsub_output_stderr)
 
 if __name__ == '__main__':
 	SubmitJobUrwid().main()
