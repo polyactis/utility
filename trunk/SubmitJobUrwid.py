@@ -29,7 +29,8 @@ class SubmitJobUrwid:
 		self.walltime_edit = urwid.Edit( ('editcp',"walltime="), "200:00:00" )
 		self.nodes_edit = urwid.IntEdit( ('editcp', "nodes="), 0 )
 		self.myri_ppn_edit = urwid.IntEdit( ('editcp', "myri:ppn="), 4)
-		self.workdir_edit = urwid.Edit( ("editcp",  "WORKDIR(-d) "), '/home/rcf-14/yuhuang/qjob_output')
+		self.workdir_edit = urwid.Edit( ("editcp",  "WORKDIR(-d) "), '~/qjob_output')
+		self.runtime_output_checkbox = urwid.CheckBox("See output while running")
 		self.other_options_edit = urwid.Edit( ("editcp", "others:"), '-q cmb -j oe -S /bin/bash')
 		self.source_bash_profile_checkbox = urwid.CheckBox("source ~/.bash_profile")
 		self.source_bash_profile_checkbox.set_state(True)
@@ -50,7 +51,13 @@ class SubmitJobUrwid:
 			('fixed left',2), ('fixed right',2)),
 		blank,
 		urwid.Padding(
-			urwid.AttrWrap( self.workdir_edit, 'editbx', 'editfc' ), ('fixed left',2), ('fixed right',2)),
+			urwid.Columns(
+				[
+				urwid.AttrWrap( self.workdir_edit, 'editbx', 'editfc' ), 
+				urwid.AttrWrap( self.runtime_output_checkbox, 'buttn', 'buttnf'),
+				],
+				2),
+			('fixed left',2), ('fixed right',2)),
 		blank,
 		urwid.Padding(
 			urwid.AttrWrap( self.other_options_edit, 'editbx', 'editfc' ), ('fixed left',2), ('fixed right',2)),
@@ -148,7 +155,10 @@ class SubmitJobUrwid:
 		
 		jobf.write("#PBS %s\n"%self.other_options_edit.get_edit_text())
 		jobf.write("#PBS -l walltime=%s\n"%self.walltime_edit.get_edit_text())
-		jobf.write("#PBS -d %s\n"%self.workdir_edit.get_edit_text())
+		jobf.write("#PBS -d %s\n"%os.path.expanduser(self.workdir_edit.get_edit_text()))
+		#see output while running
+		if self.runtime_output_checkbox.get_state():
+			jobf.write("#PBS -k eo\n")
 		no_of_nodes = int(self.nodes_edit.get_edit_text())
 		if no_of_nodes>0:
 			jobf.write("#PBS -l nodes=%s:myri:ppn=%s\n"%(no_of_nodes, self.myri_ppn_edit.get_edit_text()))
