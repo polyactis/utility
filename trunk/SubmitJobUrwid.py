@@ -113,8 +113,6 @@ class SubmitJobUrwid:
 			canvas = self.top_frame.render( size, focus=1 )
 			self.ui.draw_screen( size, canvas )
 			keys = self.ui.get_input()
-			if "Q" in keys:
-				break
 			for k in keys:
 				if k == "window resize":
 					size = self.ui.get_cols_rows()
