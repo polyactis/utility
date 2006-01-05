@@ -26,6 +26,10 @@ class SubmitJobUrwid:
 		]
 	
 	def __init__(self):
+		"""
+		01-04-06 add job_content_reset_button and its callback
+			use GridFlow instead of Pile
+		"""
 		self.walltime_edit = urwid.Edit( ('editcp',"walltime="), "200:00:00" )
 		self.nodes_edit = urwid.IntEdit( ('editcp', "nodes="), 0 )
 		self.myri_ppn_edit = urwid.IntEdit( ('editcp', "myri:ppn="), 4)
@@ -37,7 +41,8 @@ class SubmitJobUrwid:
 		self.just_write_down_checkbox = urwid.CheckBox("Write jobfile. No submission.")
 		self.jobname_prefix_edit = urwid.Edit( ("editcp", "jobname_prefix:"), '~/qjob/job')
 		self.jobnumber_edit = urwid.IntEdit( ("editcp", "job number:"), 0)
-		self.job_edit = urwid.Edit( ('editcp',"Commands here:"), multiline=True )
+		self.job_content_reset_button = urwid.Button("Job Content Reset", self.job_content_reset)
+		self.job_edit = urwid.Edit( ('editcp',""), multiline=True )
 		
 		self.items = [
 		urwid.Padding(
@@ -63,22 +68,16 @@ class SubmitJobUrwid:
 			urwid.AttrWrap( self.other_options_edit, 'editbx', 'editfc' ), ('fixed left',2), ('fixed right',2)),
 		blank,
 		urwid.Padding(
-			urwid.Columns(
+			urwid.GridFlow(
 				[
 				urwid.AttrWrap( self.source_bash_profile_checkbox, 'buttn','buttnf'),
 				urwid.AttrWrap( self.just_write_down_checkbox, 'buttn', 'buttnf'),
-				],
-				2),
-			('fixed left',2), ('fixed right',2)),
-		blank,
-		urwid.Padding(
-			urwid.Columns(
-				[
 				urwid.AttrWrap( self.jobname_prefix_edit, 'editbx', 'editfc' ),
 				urwid.AttrWrap( self.jobnumber_edit, 'editbx', 'editfc' ),
+				urwid.AttrWrap(self.job_content_reset_button, 'buttn', 'buttnf'),
 				],
-				2 ),
-			('fixed left',2), ('fixed right',2) ) ,
+				34, 2, 1, 'left'),
+			('fixed left',2), ('fixed right',2)),
 		blank,
 		urwid.Padding(
 			urwid.Pile(
@@ -181,6 +180,13 @@ class SubmitJobUrwid:
 			qsub_output_stdout = qsub_output[1].read().replace('\n', ' ')
 			qsub_output_stderr = qsub_output[2].read().replace('\n', ' ')		
 		return  (qsub_output_stdout, qsub_output_stderr)
-
+		
+	def job_content_reset(self, button_object):
+		"""
+		01-04-06
+			clear the content in job_edit
+		"""
+		self.job_edit.set_edit_text('')
+		
 if __name__ == '__main__':
 	SubmitJobUrwid().main()
