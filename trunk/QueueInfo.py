@@ -71,6 +71,12 @@ class QueueInfo:
 		except:
 			sys.stderr.write("Parsing error for this block: %s\n"% block)
 	
+	def get_free_cpus_from_job_counter_ls(self, np, job_counter_ls):
+		no_of_free_cpus = 0
+		for i in range(len(job_counter_ls)):
+			no_of_free_cpus += (np-i)*job_counter_ls[i]
+		return no_of_free_cpus
+	
 	def run(self):
 		inf = os.popen('pbsnodes -a')
 		queue_np2job_counter_ls = {}
@@ -84,11 +90,12 @@ class QueueInfo:
 				block.append(line)
 		queue_np_job_counter_ls = []
 		for queue_np, job_counter_ls in queue_np2job_counter_ls.iteritems():
-			queue_np_job_counter_ls.append([queue_np[0], queue_np[1], queue_np[2], sum(job_counter_ls), job_counter_ls])
+			queue_np_job_counter_ls.append([queue_np[0], queue_np[1], queue_np[2], \
+				sum(job_counter_ls), self.get_free_cpus_from_job_counter_ls(queue_np[2], job_counter_ls), job_counter_ls])
 		queue_np_job_counter_ls.sort()
 		
 		writer = csv.writer(sys.stdout, delimiter = '\t')
-		writer.writerow(['q_name', 'arch', 'np', '#nodes', 'job_counter_ls'])
+		writer.writerow(['q_name', 'arch', 'np', '#nodes', '#free cpus', 'job_counter_ls'])
 		for row in queue_np_job_counter_ls:
 			writer.writerow(row)
 
