@@ -14,9 +14,15 @@ Description:
 	Program to have an overview of the occupation of queues.
 	
 """
-
-import sys, getopt, os, csv, re
-sys.path += [os.path.join(os.path.expanduser('~/script/annot/bin'))]
+import sys, os, math
+bit_number = math.log(sys.maxint)/math.log(2)
+if bit_number>40:       #64bit
+	sys.path.insert(0, os.path.expanduser('~/lib64/python'))
+	sys.path.insert(0, os.path.join(os.path.expanduser('~/script64/annot/bin')))
+else:   #32bit
+	sys.path.insert(0, os.path.expanduser('~/lib/python'))
+	sys.path.insert(0, os.path.join(os.path.expanduser('~/script/annot/bin')))
+import getopt, csv, re
 if sys.version_info[:2] < (2, 3):       #python2.2 or lower needs some extra
 	from python2_3 import *
 
