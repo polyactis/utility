@@ -12,19 +12,15 @@ Examples:
 
 Description:
 	Program to have an overview of the occupation of queues.
-	
+		Yu Huang 2006-03-31
 """
-import sys, os, math
-bit_number = math.log(sys.maxint)/math.log(2)
-if bit_number>40:       #64bit
-	sys.path.insert(0, os.path.expanduser('~/lib64/python'))
-	sys.path.insert(0, os.path.join(os.path.expanduser('~/script64/annot/bin')))
-else:   #32bit
-	sys.path.insert(0, os.path.expanduser('~/lib/python'))
-	sys.path.insert(0, os.path.join(os.path.expanduser('~/script/annot/bin')))
-import getopt, csv, re
-if sys.version_info[:2] < (2, 3):       #python2.2 or lower needs some extra
-	from python2_3 import *
+import sys, os, getopt, re
+
+def sum(ls):
+	s = 0
+	for i in ls:
+		s += i
+	return s
 
 
 class QueueInfo:
@@ -100,10 +96,13 @@ class QueueInfo:
 				sum(job_counter_ls), self.get_free_cpus_from_job_counter_ls(queue_np[2], job_counter_ls), job_counter_ls])
 		queue_np_job_counter_ls.sort()
 		
-		writer = csv.writer(sys.stdout, delimiter = '\t')
-		writer.writerow(['q_name', 'arch', 'np', '#nodes', '#free cpus', 'job_counter_ls'])
+		sys.stdout.write('\n')
+		header = ['q_name', 'arch', 'np', '#nodes', '#free cpus', 'job_counter_ls']
+		sys.stdout.write('%s\n'%'\t'.join(header))
 		for row in queue_np_job_counter_ls:
-			writer.writerow(row)
+			sys.stdout.write('%s\t%s\t%s\t%s\t%s\t%s\n'%(row[0], row[1], row[2], row[3], row[4], row[5]))
+		sys.stderr.write('\n')
+		sys.stderr.write("Each number in last column's list is #nodes with 0,1,2,3,4 cpus occupied respectively.\n")
 
 if __name__ == '__main__':
 	try:
