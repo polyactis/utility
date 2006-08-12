@@ -53,7 +53,7 @@ class CheckQueue:
 		
 		self.listbox = urwid.ListBox( self.items )
 		
-		instruct = urwid.Text("F6 to execute command, F7 to clusterusage. F8 to QueueInfo.py, F12 to quit.")
+		instruct = urwid.Text("Enter to execute command, F7 to clusterusage. F8 to QueueInfo.py, Esc to quit.")
 		header = urwid.AttrWrap( instruct, 'header' )
 		
 		self.footer_text = urwid.Text("Aug 11th, 2006 by Yu Huang")
@@ -77,14 +77,14 @@ class CheckQueue:
 				if k == "window resize":
 					size = self.ui.get_cols_rows()
 					continue
-				elif k == 'f6':
+				elif k == 'enter':
 					command_line = self.command_edit.get_edit_text()
 					self.run_command(command_line)
 				elif k == 'f7':
 					self.run_command('clusterusage')
 				elif k == 'f8':
 					self.run_command(os.path.expanduser('~/script/utility/QueueInfo.py'))
-				elif k == 'f12':
+				elif k == 'esc':
 					return	#break is not enough
 				self.top_frame.keypress( size, k )
 	
