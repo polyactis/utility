@@ -48,8 +48,14 @@ class QueueInfo:
 		01-07-06
 			(queue_name, np) is key, [0,0,0,0,0] is value, each corresponding to #nodes with 
 			a certain number(index) of jobs
+		2007-01-20
+			deal with old parsing errors for offline nodes
 		"""
 		job_list = []	#
+		arch = None
+		np = None
+		queue_list = None
+		machine_id = block[0].strip()
 		for line in block:
 			p_key_result = self.p_key.search(line)
 			p_value_result = self.p_value.search(line)
@@ -65,13 +71,20 @@ class QueueInfo:
 				elif key == 'status':
 					arch = self.get_node_arch(value)
 		try:
-			for queue in queue_list:
-				key = (queue, arch, np)
-				if key not in queue_np2job_counter_ls:
-					queue_np2job_counter_ls[key] = [0]*5
-				queue_np2job_counter_ls[key][len(job_list)] += 1
+			if arch and np and queue_list:
+				for queue in queue_list:
+					key = (queue, arch, np)
+					if key not in queue_np2job_counter_ls:
+						queue_np2job_counter_ls[key] = [0]*5
+					old_length = len(queue_np2job_counter_ls[key])-1	#2007-01-20
+					if len(job_list)>old_length:
+						queue_np2job_counter_ls[key] += [0]*(len(job_list)-old_length)
+					queue_np2job_counter_ls[key][len(job_list)] += 1
+				return None
+			else:
+				return machine_id
 		except:
-			sys.stderr.write("Parsing error for this block: %s\n"% block)
+			print job_list
 	
 	def get_free_cpus_from_job_counter_ls(self, np, job_counter_ls):
 		no_of_free_cpus = 0
@@ -83,9 +96,12 @@ class QueueInfo:
 		inf = os.popen('pbsnodes -a')
 		queue_np2job_counter_ls = {}
 		block = []
+		bad_machine_id_ls = []
 		for line in inf:
 			if line == '\n':
-				self.parse_one_node_info(block, queue_np2job_counter_ls)
+				bad_machine_id = self.parse_one_node_info(block, queue_np2job_counter_ls)
+				if bad_machine_id:
+					bad_machine_id_ls.append(bad_machine_id)
 				block = []
 				continue
 			else:
@@ -101,8 +117,10 @@ class QueueInfo:
 		sys.stdout.write('%s\n'%'\t'.join(header))
 		for row in queue_np_job_counter_ls:
 			sys.stdout.write('%s\t%s\t%s\t%s\t%s\t%s\n'%(row[0], row[1], row[2], row[3], row[4], row[5]))
-		sys.stderr.write('\n')
-		sys.stderr.write("Each number in last column's list is #nodes with 0,1,2,3,4 cpus occupied respectively.\n")
+		sys.stdout.write('\n')
+		sys.stdout.write("Each number in last column's list is #nodes with 0,1,2,3,4 cpus occupied respectively.\n")
+		print
+		print "%s bad/offline machines:"%(len(bad_machine_id_ls)), bad_machine_id_ls
 
 if __name__ == '__main__':
 	try:
