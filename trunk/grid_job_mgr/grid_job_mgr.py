@@ -201,8 +201,11 @@ class grid_job_mgr:
 		"""
 		05-29-05
 			add submit_option and no_of_nodes
+		2008-01-10
+			use sys.argv[0] to figure out the path of grid_job_mgr.glade
 		"""
-		xml = gtk.glade.XML('grid_job_mgr.glade')
+		program_path = os.path.dirname(sys.argv[0])
+		xml = gtk.glade.XML(os.path.join(program_path, 'grid_job_mgr.glade'))
 		xml.signal_autoconnect(self)
 		self.window1 = xml.get_widget("window1")
 		self.window1.connect("destroy", self.destroy)
