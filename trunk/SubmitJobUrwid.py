@@ -49,6 +49,7 @@ class SubmitJobUrwid:
 		self.jobname_prefix_edit = urwid.Edit( ("editcp", "jobname_prefix:"), '~/qjob/job')
 		self.jobnumber_edit = urwid.IntEdit( ("editcp", "job number:"), 0)
 		self.job_content_reset_button = urwid.Button("Job Content Reset", self.job_content_reset)
+		self.exit_button = urwid.Button("Exit", self.program_exit)
 		self.job_edit = urwid.Edit( ('editcp',""), multiline=True )
 		
 		self.items = [
@@ -82,6 +83,7 @@ class SubmitJobUrwid:
 				urwid.AttrWrap( self.jobname_prefix_edit, 'editbx', 'editfc' ),
 				urwid.AttrWrap( self.jobnumber_edit, 'editbx', 'editfc' ),
 				urwid.AttrWrap(self.job_content_reset_button, 'buttn', 'buttnf'),
+				urwid.AttrWrap(self.exit_button, 'buttn', 'buttnf'),
 				],
 				34, 2, 1, 'left'),
 			('fixed left',2), ('fixed right',2)),
@@ -101,7 +103,7 @@ class SubmitJobUrwid:
 		instruct = urwid.Text("Job submission program based on Urwid. F8 to submit, F12 to quit.")
 		header = urwid.AttrWrap( instruct, 'header' )
 		
-		self.footer_text = urwid.Text("Dec 23rd, 2005 by Yu Huang")
+		self.footer_text = urwid.Text("Mar 15th, 2008 by Yu Huang")
 		footer = urwid.AttrWrap(self.footer_text, 'footer')
 		
 		self.top_frame = urwid.Frame(urwid.AttrWrap(self.listbox, 'body'), header, footer)
@@ -194,6 +196,14 @@ class SubmitJobUrwid:
 			clear the content in job_edit
 		"""
 		self.job_edit.set_edit_text('')
+	
+	def program_exit(self, button_object):
+		"""
+		2008-03-15
+			exits the program. F12 doesn't work everywhere.
+		"""
+		sys.exit(0)
+
 		
 if __name__ == '__main__':
 	SubmitJobUrwid().main()
