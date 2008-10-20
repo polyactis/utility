@@ -11,6 +11,7 @@ else:   #32bit
 import os, sys, time
 import urwid.curses_display
 import urwid
+import subprocess
 
 blank = urwid.Text("")
 
@@ -89,9 +90,18 @@ class CheckQueue:
 				self.top_frame.keypress( size, k )
 	
 	def run_command(self, command_line):
+		"""
+		2008-10-20
+			os.popen3 is deprecated. use subprocess.
+		"""
+		command_handler = subprocess.Popen(command_line, shell=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE)	#2008-10-20 shell=True allows command_line to be a string, rather than a list of command and its arguments
+		command_stdout = command_handler.stdout.read()
+		command_stderr = command_handler.stderr.read()
+		"""
 		command_output_handler = os.popen3(command_line)
 		command_stdout = command_output_handler[1].read()
 		command_stderr = command_output_handler[2].read()
+		"""
 		self.display_text.set_text([('important', "%s\n"%time.asctime()), command_stdout, ('error', command_stderr)])
 	
 
