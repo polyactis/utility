@@ -147,6 +147,40 @@ class SubmitJobUrwid:
 		else:
 			self.footer_text.set_text(('header', "Empty job!!"))
 	
+	def write_job_to_file(cls, job_content, job_fname, no_of_nodes, \
+				qsub_option, ppn=None, workdir=None, walltime=None, runtime_output_stdout=False,\
+				source_bash=True):
+		"""
+		2008-11-03
+			refactor submit_single_job() to allow hpc_cmb_pbs.py to be able to call this function
+		"""
+		jobf = open(job_fname, 'w')
+		jobf.write("#!/bin/sh\n")
+		
+		if qsub_option:
+			jobf.write("#PBS %s\n"%qsub_option)
+		if walltime:
+			jobf.write("#PBS -l walltime=%s\n"%walltime)
+		if workdir:
+			jobf.write("#PBS -d %s\n"%workdir)
+		#see output while running
+		if runtime_output_stdout:
+			jobf.write("#PBS -k eo\n")
+		
+		if no_of_nodes>0 and ppn:
+			jobf.write("#PBS -l nodes=%s:myri:ppn=%s\n"%(no_of_nodes, ppn))
+		
+		if source_bash:
+			jobf.write("source ~/.bash_profile\n")
+		
+		jobf.write("date\n")
+		jobf.write('echo COMMANDLINE: "%s"\n'%job_content)
+		jobf.write('%s\n'%job_content)
+		jobf.write("date\n")
+		jobf.close()
+		return 0
+	write_job_to_file = classmethod(write_job_to_file)
+	
 	def submit_single_job(self, single_job):
 		"""
 		2008-11-03
@@ -159,30 +193,17 @@ class SubmitJobUrwid:
 		job_name = os.path.expanduser(job_name)
 		job_name = '%s_%s'%(job_name, self.jobnumber_edit.get_edit_text())
 		
-		jobf = open(job_name, 'w')
-		jobf.write("#!/bin/sh\n")
-		
-		jobf.write("#PBS %s\n"%self.other_options_edit.get_edit_text())
-		jobf.write("#PBS -l walltime=%s\n"%self.walltime_edit.get_edit_text())
-		jobf.write("#PBS -d %s\n"%os.path.expanduser(self.workdir_edit.get_edit_text()))
-		#see output while running
-		if self.runtime_output_checkbox.get_state():
-			jobf.write("#PBS -k eo\n")
+		qsub_option = self.other_options_edit.get_edit_text()
+		walltime = self.walltime_edit.get_edit_text()
+		workdir = os.path.expanduser(self.workdir_edit.get_edit_text())
+		runtime_output_stdout= self.runtime_output_checkbox.get_state()
 		no_of_nodes = int(self.nodes_edit.get_edit_text())
-		if no_of_nodes>0:
-			jobf.write("#PBS -l nodes=%s:myri:ppn=%s\n"%(no_of_nodes, self.myri_ppn_edit.get_edit_text()))
+		ppn = self.myri_ppn_edit.get_edit_text()
+		source_bash = self.source_bash_profile_checkbox.get_state()
 		
-		if self.source_bash_profile_checkbox.get_state():
-			jobf.write("source ~/.bash_profile\n")
-		
-		#single_job_list = single_job.split(';')	#2008-11-03
-		single_job_list = [single_job]
-		for job_content in single_job_list:
-			jobf.write("date\n")
-			jobf.write('echo COMMANDLINE: "%s"\n'%job_content)
-			jobf.write('%s\n'%job_content)
-			jobf.write("date\n")
-		jobf.close()
+		return_code = self.write_job_to_file(single_job, job_name, no_of_nodes, \
+				qsub_option, ppn=ppn, workdir=workdir, walltime=walltime, runtime_output_stdout=runtime_output_stdout,\
+				source_bash=source_bash)
 		
 		qsub_output_stdout = ''
 		qsub_output_stderr = ''
