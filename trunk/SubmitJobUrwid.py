@@ -11,7 +11,7 @@ if bit_number>40:       #64bit
 else:   #32bit
 	sys.path.insert(0, os.path.expanduser('~/lib/python'))
 	sys.path.insert(0, os.path.join(os.path.expanduser('~/script/annot/bin')))
-import os, sys, time
+import os, sys, time, subprocess
 import urwid.curses_display
 import urwid
 
@@ -149,6 +149,9 @@ class SubmitJobUrwid:
 	
 	def submit_single_job(self, single_job):
 		"""
+		2008-11-03
+			no longer split a single_job into several lines by ';'
+			subprocess.Popen() replaces os.popen3()
 		12-23-05
 			global structures used
 		"""
@@ -172,10 +175,11 @@ class SubmitJobUrwid:
 		if self.source_bash_profile_checkbox.get_state():
 			jobf.write("source ~/.bash_profile\n")
 		
-		single_job_list = single_job.split(';')
+		#single_job_list = single_job.split(';')	#2008-11-03
+		single_job_list = [single_job]
 		for job_content in single_job_list:
 			jobf.write("date\n")
-			jobf.write('echo COMMANDLINE: %s\n'%job_content)
+			jobf.write('echo COMMANDLINE: "%s"\n'%job_content)
 			jobf.write('%s\n'%job_content)
 			jobf.write("date\n")
 		jobf.close()
@@ -185,9 +189,14 @@ class SubmitJobUrwid:
 		if self.just_write_down_checkbox.get_state():
 			qsub_output_stdout = '%s written.'%job_name
 		else:
+			command_handler = subprocess.Popen('qsub %s'%job_name, shell=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE)	#2008-10-20 shell=True allows command_line to be a string, rather than a list of command and its arguments
+			qsub_output_stdout = command_handler.stdout.read().replace('\n', ' ')
+			qsub_output_stderr = command_handler.stderr.read().replace('\n', ' ')
+			"""
 			qsub_output = os.popen3('qsub %s'%job_name)
 			qsub_output_stdout = qsub_output[1].read().replace('\n', ' ')
-			qsub_output_stderr = qsub_output[2].read().replace('\n', ' ')		
+			qsub_output_stderr = qsub_output[2].read().replace('\n', ' ')
+			"""
 		return  (qsub_output_stdout, qsub_output_stderr)
 		
 	def job_content_reset(self, button_object):
