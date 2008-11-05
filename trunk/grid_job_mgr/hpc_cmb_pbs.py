@@ -16,12 +16,13 @@ import sys, os, math
 sys.path.insert(0, os.path.expanduser('~/lib/python'))
 sys.path.insert(0, os.path.join(os.path.expanduser('~/script/')))
 import JobDB
-import subprocess
+import subprocess, time, traceback
 
 import StringIO, re
 from sets import Set
 from pymodule import PassingData
-from datetime import datetime
+from datetime import datetime, timedelta
+from utility.SubmitJobUrwid import SubmitJobUrwid
 
 class hpc_cmb_pbs(object):
 	__doc__ = __doc__
@@ -54,20 +55,114 @@ class hpc_cmb_pbs(object):
 			#12-20-05	? is used to do non-greedy match, for i.e.: '!Platform_description = Keywords = high density oligonucleotide array'
 		self.pbsnode_value = re.compile(r' = (?P<value>.*)$')
 		
+		self.mem_pattern_from_qsub_option = re.compile(r'-l mem=(?P<memory>\w*)')
+		self.tmp_fname = '/tmp/job_%s'%(time.time())
+		self.getJobIDFromFullName = lambda x: int(x.split('.')[0])
 		
-	def submit_job(self, job_list, job_fprefix, job_starting_number, no_of_nodes, \
-				qsub_option, ppn=None, submit_option=None, workdir=None, walltime=None, runtime_output_stdout=False):
+	def submit_job(self, job_content, job_file_dir, job_fprefix, job_starting_number, no_of_nodes, \
+				qsub_option, ppn=None, submit_option=None, workdir=None, walltime=None, runtime_output_stdout=False,\
+				queue='cmb'):
 		"""
-		2008-11-01
+		2008-11-04
+			if job_content contains '#!/bin/sh', just write the contents into files and submit
+			
+			else:
+				treat each line as a job, submit, create a job in db
 		"""
-		pass
+		job_content_io = StringIO.StringIO(job_content)
 		
+		if job_content.find('#!/bin/sh')!=-1:	#won't save the job in db. fetch its from 'qstat -f job_id' by clicking 'refresh'
+			single_job = ''
+			for line in job_content_io:
+				if line.find('#!/bin/sh')!=-1:
+					if single_job:	#to skip the first '#!/bin/sh'
+						of = open(self.tmp_fname, 'w')
+						of.write(single_job)
+						of.close()
+						job_fname = os.path.join(job_file_dir, '%s%s'%(job_fprefix, job_starting_number))
+						job_id = self.qsub_job_on_cluster(self.tmp_fname, job_fname)
+						job_starting_number += 1
+					single_job = line	#set to the beginning line
+				else:
+					single_job += line
+				
+			if single_job:	#the last job
+				of = open(self.tmp_fname, 'w')
+				of.write(single_job)
+				of.close()
+				job_fname = os.path.join(job_file_dir, '%s%s'%(job_fprefix, job_starting_number))
+				job_id = self.qsub_job_on_cluster(self.tmp_fname, job_fname)
+				job_starting_number += 1
+				single_job = ''
+		else:	#2008-11-03 de-novo submission
+			for single_job in job_content_io:	#each line is a job
+				return_code = SubmitJobUrwid.write_job_to_file(single_job, self.tmp_fname, no_of_nodes, \
+															qsub_option, ppn=ppn, workdir=workdir, \
+															walltime=walltime, runtime_output_stdout=runtime_output_stdout)
+				job_basename = '%s%s'%(job_fprefix, job_starting_number)
+				job_fname = os.path.join(job_file_dir, job_basename)
+				job_id = self.qsub_job_on_cluster(self.tmp_fname, job_fname)
+				if job_id is not None:
+					#save the job in db
+					job = JobDB.Job(id=job_id)
+					job.short_name = job_basename
+					state_id = 'Q'
+					job_state = JobDB.JobState.get(state_id)
+					if not job_state:
+						job_state = JobDB.JobState(short_name=state_id)
+					job.job_state = job_state
+					job.job_fname = job_fname
+					job.content = single_job
+					
+					job.username = self.cluster_username
+					job.queue_id = queue
+					job.no_of_nodes = no_of_nodes
+					job.ppn = ppn
+					mem_pattern = self.mem_pattern_from_qsub_option.search(qsub_option)	#find the memory from qsub_option
+					if mem_pattern:
+						job.memory = mem_pattern.group('memory')
+					job.walltime = walltime
+					job.workdir = workdir
+					job.see_output_while_running = runtime_output_stdout
+					if job.see_output_while_running:	#in home dir
+						stdout_dir = '~'
+					else:	#in workdir
+						stdout_dir = workdir
+					
+					job.job_stdout_fname=os.path.join(stdout_dir, '%s.o%s'%(job_basename, job_id))
+					if qsub_option.find('-j oe')==-1 and qsub_option.find('-j eo')==-1:	#need to set the job_stderr_fname as well
+						job.job_stderr_fname=os.path.join(stdout_dir,  '%s.e%s'%(job_basename, job_id))
+						
+					job.time_submitted = datetime.now()		
+					self.db.session.save_or_update(job)
+					self.db.session.flush()
+				
+				job_starting_number += 1
+				
+		return job_starting_number
+	
+	def qsub_job_on_cluster(self, source_fname, target_fname):
+		"""
+		2008-11-04
+			1. scp file over to the cluster
+			2. qsub on the cluster
+			3. get job_id and return it
+		"""
+		commandline = 'scp %s %s@%s:%s'%(source_fname, self.cluster_username, self.cluster_main_node, target_fname)
+		command_out = self.runLocalCommand(commandline, report_stdout=True)
+		commandline = 'qsub "%s"'%target_fname	#2008-11-04 double quotes escape the '~'. otherwise '~' would become local home dir
+		command_out = self.runRemoteCommand(commandline, report_stdout=True)
+		if command_out.stdout_content:
+			job_id = self.getJobIDFromFullName(command_out.stdout_content)
+		else:
+			job_id = None
+		return job_id
 	
 	def kill_job(self, job_id):
 		"""
 		2008-11-01
 		"""
-		commandline = 'ssh %s@%s qdel %s'%(self.cluster_username, self.cluster_main_node, job_id)
+		commandline = 'qdel %s'%(job_id)
 		command_out = self.runRemoteCommand(commandline)
 		job = JobDB.Job.get(job_id)
 		if command_out.output_stdout:
@@ -85,7 +180,7 @@ class hpc_cmb_pbs(object):
 		"""
 		2008-11-01
 		"""
-		commandline = 'ssh %s@%s qstat %s'%(self.cluster_username, self.cluster_main_node, self.queue_id)
+		commandline = 'qstat %s'%(self.queue_id)
 		if username:
 			commandline += ' -u %s'%username
 		command_out = self.runRemoteCommand(commandline)
@@ -126,7 +221,6 @@ class hpc_cmb_pbs(object):
 
 
 		"""
-		getJobIDFromFullName = lambda x: int(x.split('.')[0])
 		
 		job_id_ls = []
 		status_list = status_value.split(',')
@@ -136,7 +230,7 @@ class hpc_cmb_pbs(object):
 			if status_item_key=='jobs':
 				if further_check_node:	#don't check it if not further_check_node (no username's jobs on this node)
 					job_id_ls = status_item_value.split(' ')
-					job_id_ls = map(getJobIDFromFullName, job_id_ls)
+					job_id_ls = map(self.getJobIDFromFullName, job_id_ls)
 			elif status_item_key in self.node_var_name_set:
 				setattr(node, status_item_key, status_item_value)
 			elif status_item_key in self.nodelog_var_name_set:
@@ -246,7 +340,7 @@ class hpc_cmb_pbs(object):
 		"""
 		if self.debug:
 			sys.stderr.write("Updating node information in db ... \n")
-		commandline = 'ssh %s@%s pbsnodes -a'%(self.cluster_username, self.cluster_main_node)
+		commandline = 'pbsnodes -a'
 		command_out = self.runRemoteCommand(commandline, report_stderr=False)
 		
 		job_id2current_nodelog_id_ls = {}
@@ -317,6 +411,8 @@ class hpc_cmb_pbs(object):
 	
 	def fillInNewJob(self, job, job_key2value, username):
 		"""
+		2008-11-04
+			fix bugs when some fields in job_key2value are not available
 		2008-11-01
 			fill in via job_key2value
 			
@@ -338,46 +434,61 @@ class hpc_cmb_pbs(object):
 		elif job_key2value['Keep_Files']=='eo' or job_key2value['Keep_Files']=='oe':
 			job.see_output_while_running = True
 		
-		stdout_fname = job_key2value['Output_Path'].split(':')[1]
-		if job.see_output_while_running:
-			job.job_stdout_fname = '~/%s'%os.path.basename(stdout_fname)
+		output_path = job_key2value.get('Output_Path')
+		if output_path:
+			output_path_ls = output_path.split(':')
+			if len(output_path_ls)>1:
+				stdout_fname = output_path_ls[1]
+				
+				if job.see_output_while_running:
+					job.job_stdout_fname = '~/%s'%os.path.basename(stdout_fname)
+				else:
+					job.job_stdout_fname = stdout_fname
+				job.job_stdout = self.fetch_file_content(job.job_stdout_fname)
 		else:
-			job.job_stdout_fname = stdout_fname
-		job.job_stdout = self.fetch_file_content(job.job_stdout_fname)
-		
+			job.job_stdout_fname = output_path
+			
 		if job_key2value['Join_Path']=='n':	#path not merged
-			stderr_fname = job_key2value['Error_Path'].split(':')[1]
-			if job.see_output_while_running:
-				job.job_stderr_fname = '~/%s'%os.path.basename(stderr_fname)
-			else:
-				job.job_stderr_fname = stderr_fname
-			job_stderr = self.fetch_file_content(job.job_stderr_fname)
+			error_path = job_key2value.get('Error_Path')
+			if error_path:
+				error_path_ls = error_path.split(':')
+				if len(error_path_ls)>1:
+					stderr_fname = error_path_ls[1]
+					if job.see_output_while_running:
+						job.job_stderr_fname = '~/%s'%os.path.basename(stderr_fname)
+					else:
+						job.job_stderr_fname = stderr_fname
+					job_stderr = self.fetch_file_content(job.job_stderr_fname)
+				else:
+					job.job_stderr_fname = error_path
 		
 		job.username = username
 		
 		job.queue_id = job_key2value['queue']
 		
 		job.server = job_key2value['server']
-		job.no_of_nodes = job_key2value.get('Resource_List.nodect')
-		job.ppn = job_key2value['Resource_List.nodes'].split('=')[-1]
+		job.no_of_nodes = int(job_key2value.get('Resource_List.nodect'))
+		job.ppn = int(job_key2value['Resource_List.nodes'].split('=')[-1])
 		job.memory = job_key2value.get('Resource_List.mem')
 		job.walltime = job_key2value.get('Resource_List.walltime')
 		job.workdir = self.workdir
 		job.time_submitted = datetime.strptime(job_key2value['ctime'], '%a %b %d %H:%M:%S %Y')	#ctime ~ 'Fri Oct 31 13:06:14 2008'
 		job.time_started = datetime.strptime(job_key2value['mtime'], '%a %b %d %H:%M:%S %Y')	#not sure it's ctime/mtime/qtime/etime. but mtime is always minutes bigger than others
 		
-		if job.state_id=='C':	#job is done
+		if job.state_id=='C':	#job is done, very rare to happen right when executing 'qstat -f job_id'
 			job.time_finished = datetime.now()
-			
-		node_cpus = job_key2value['exec_host'].split('+')
-		node_set = Set()
-		for node_cpu in node_cpus:
-			node_name, cpu = node_cpu.split('/')
-			node = JobDB.Node.get(node_name)
-			if node and node_name not in node_set:
-				node_set.add(node_name)
-				job2node = JobDB.Job2Node(node=node, job=job)
-				job.nodes.append(job2node)
+		
+		exec_host = job_key2value.get('exec_host')
+		if exec_host:	#2008-11-04 it could be none if it's not running
+			node_cpus = exec_host.split('+')
+			node_set = Set()
+			for node_cpu in node_cpus:
+				node_name, cpu = node_cpu.split('/')
+				node = JobDB.Node.get(node_name)
+				if node and node_name not in node_set:
+					node_set.add(node_name)
+					job2node = JobDB.Job2Node(node=node, job=job)
+					job.nodes.append(job2node)
 		
 		#for nodelog_id in current_nodelog_id_ls:
 		if self.debug:
@@ -385,6 +496,9 @@ class hpc_cmb_pbs(object):
 	
 	def updateOneJobInDB(self, job_id, username):
 		"""
+		2008-11-04
+			if it's a running job and already in db, update job_stdout only when job_stdout_fname has changed since the last time its info in db was updated.
+			ditto for job_stderr
 		2008-11-01
 			use 'qstat -f $job_id' to get full info of a job
 			
@@ -411,10 +525,10 @@ class hpc_cmb_pbs(object):
 		elif job.state_id=='C':	#job in db and complete. do nothing and return
 			return
 		is_job_completed = 0
-		commandline = 'ssh %s@%s qstat -f %s'%(self.cluster_username, self.cluster_main_node, job_id)
+		commandline = 'qstat -f %s'%(job_id)
 		command_out = self.runRemoteCommand(commandline)
 		output_stdout = command_out.output_stdout.read()
-		if output_stdout:	#2008-11-02 this job still exists
+		if output_stdout and not command_out.stderr_content:	#2008-11-02 this job still exists and no error
 			job_key2value = self.getJobKey2Value(StringIO.StringIO(output_stdout))
 			if job.short_name is None:	#not in db yet
 				self.fillInNewJob(job, job_key2value, username)
@@ -424,9 +538,19 @@ class hpc_cmb_pbs(object):
 					if job.state_id=='C':
 						job.time_finished = datetime.now()
 				if job.see_output_while_running:
-					job.job_stdout = self.fetch_file_content(job.job_stdout_fname)
+					time_of_last_change = self.getRemoteFileTimeOfLastChange(job.job_stdout_fname)
+					if time_of_last_change:
+						time_of_last_change = time_of_last_change + timedelta(minutes=5)	#2008-11-04 allow 5 minutes behind on the cluster
+						if (not job.date_updated and job.date_created and job.date_created<time_of_last_change) or \
+									(job.date_updated and job.date_updated<time_of_last_change):	#condition to fetch the content
+							job.job_stdout = self.fetch_file_content(job.job_stdout_fname)
 					if job_key2value['Keep_Files']=='n' or job.job_stderr_fname:	#it might not be available if it's merged into stdout
-						job.job_stderr = self.fetch_file_content(job.job_stderr_fname)
+						time_of_last_change = self.getRemoteFileTimeOfLastChange(job.job_stderr_fname)
+						if time_of_last_change:
+							time_of_last_change = time_of_last_change + timedelta(minutes=5)	#2008-11-04 allow 5 minutes behind on the cluster
+							if (not job.date_updated and job.date_created and job.date_created<time_of_last_change) or \
+									(job.date_updated and job.date_updated<time_of_last_change):	#condition to fetch the content
+								job.job_stderr = self.fetch_file_content(job.job_stderr_fname)
 			
 			job_log = JobDB.JobLog()
 			job_log.job = job
@@ -441,7 +565,7 @@ class hpc_cmb_pbs(object):
 		
 		if is_job_completed and job.short_name is not None:	#2008-11-02 it's completed. but not recorded in db
 			job.state_id='C'
-			job.job_stdout = self.fetch_file_content(job.job_stdout_fname)
+			job.job_stdout = self.fetch_file_content(job.job_stdout_fname)	#fetch the content no matter what has changed
 			job.time_finished = self.parseTimeFinishedOutOfStdoutFile(job.job_stdout)
 			if job.job_stderr_fname:
 				job.job_stderr = self.fetch_file_content(job.job_stderr_fname)
@@ -451,7 +575,25 @@ class hpc_cmb_pbs(object):
 		self.db.session.flush()
 		if self.debug:
 			sys.stderr.write("Done.\n")
-		
+	
+	
+	def getRemoteFileTimeOfLastChange(self, fname):
+		"""
+		2008-11-04
+			use stat to figure out the time of last change of a file on remote cluster
+		"""
+		commandline = 'stat -c %z ' + '"%s"'%fname	#%x, %y, %z are time of last access, modification, change respectivelys
+		#output looks like "2008-11-04 00:22:18.000000000 -0800"
+		command_out = self.runRemoteCommand(commandline)
+		stdout_content = command_out.output_stdout.read()
+		try:
+			time_of_last_change = datetime.strptime(stdout_content[:19].strip(), '%Y-%m-%d %H:%M:%S')	#.%f %z for microseconds and timezone info doesn't work in python 2.5
+		except:
+			traceback.print_exc()
+			sys.stderr.write('%s.\n'%repr(sys.exc_info()))
+			time_of_last_change = None
+		return time_of_last_change
+	
 	def parseTimeFinishedOutOfStdoutFile(self, job_stdout):
 		"""
 		2008-11-02
@@ -483,8 +625,32 @@ class hpc_cmb_pbs(object):
 				break
 		return time_finished
 	
-	def updateDB(self, username=None, update_node_info=False, jobs_since=None):
+	def updateJobsInDB(self, job_id_set, username):
 		"""
+		2008-11-04
+			a function to qstat all jobs at once, not yet finished
+		"""
+		commandline = 'qstat -f '
+		for job_id in job_id_set:
+			commandline += '%s'%(str(job_id))
+		
+		command_out = self.runRemoteCommand(commandline)
+		qstat_for_one_job = ''
+		for line in command_out.output_stdout:
+			if line.find('Job Id:')==0:
+				
+				qstat_for_one_job = line
+			else:
+				qstat_for_one_job += line
+			
+		if qstat_for_one_job:
+			pass
+		
+	def updateDB(self, username=None, update_node_info=False, jobs_since=None, only_running=False):
+		"""
+		2008-11-04
+			add only_running
+			fix jobs_since
 		2008-11-01
 			0. check in db that are still marked as 'R'
 			1. run qstat -u username
@@ -493,11 +659,14 @@ class hpc_cmb_pbs(object):
 		"""
 		sys.stderr.write("%s: Checking the status of the queue ... \n"%datetime.now())
 		
-		query = JobDB.Job.query.filter_by(state_id='R')
+		query = JobDB.Job.query
+		if only_running:
+			query = query.filter_by(state_id='R')
+		
 		if username:
 			query = query.filter_by(username=username)
 		if jobs_since:
-			query = query.filter(time_submitted>=jobs_since)
+			query = query.filter(JobDB.Job.time_submitted>=jobs_since)
 		
 		job_id_ls = [row.id for row in query]
 		
@@ -516,6 +685,8 @@ class hpc_cmb_pbs(object):
 	
 	def fetch_job_stdouterr(self, job_id):
 		"""
+		2008-11-04
+			fix a bug when job_stdouterr from job.job_stdout is None
 		2008-11-01
 			if it's completed and stdouterr in db, fetch it from db.
 			if it's marked as running, fetch it from file and put into db
@@ -524,7 +695,10 @@ class hpc_cmb_pbs(object):
 		job = JobDB.Job.get(job_id)
 		job_stdouterr = job.job_stdout
 		if job.job_stderr_fname:
-			job_stdouterr += job.job_stderr
+			if job_stdouterr:
+				job_stdouterr += job.job_stderr
+			else:
+				job_stdouterr = job.job_stderr
 		return job_stdouterr
 	
 	def fetch_file_content(self, fname):
@@ -532,23 +706,41 @@ class hpc_cmb_pbs(object):
 		2008-11-01
 			fetch file content from remote host
 		"""
-		commandline = 'ssh %s@%s cat "%s"'%(self.cluster_username, self.cluster_main_node, fname)
+		commandline = 'cat "%s"'%(fname)
 		command_out = self.runRemoteCommand(commandline, report_stderr=False)
 		return command_out.output_stdout.read()
 	
-	def runRemoteCommand(self, commandline, report_stderr=True):
+	def runRemoteCommand(self, commandline, report_stderr=True, report_stdout=False):
 		"""
 		2008-11-01
+			wrapper to run a commandline on the cluster.
+		"""
+		commandline = 'ssh %s@%s %s'%(self.cluster_username, self.cluster_main_node, commandline)
+		return self.runLocalCommand(commandline, report_stderr, report_stdout)
+		
+	def runLocalCommand(self, commandline, report_stderr=True, report_stdout=False):
+		"""
+		2008-11-04
+			refactor out of runRemoteCommand()
+			
+			run a command local (not on the cluster)
 		"""
 		command_handler = subprocess.Popen(commandline, shell=True, \
 										stderr=subprocess.PIPE, stdout=subprocess.PIPE)
 		output_stdout = command_handler.stdout
 		output_stderr = command_handler.stderr
+		stderr_content = None
+		stdout_content = None
 		if report_stderr:
 			stderr_content = output_stderr.read()
 			if stderr_content:
 				sys.stderr.write('stderr of %s: %s \n'%(commandline, stderr_content))
-		return_data = PassingData(commandline=commandline, output_stdout=output_stdout, output_stderr=output_stderr)
+		if report_stdout:
+			stdout_content = output_stdout.read()
+			if stdout_content:
+				sys.stderr.write('stdout of %s: %s \n'%(commandline, stdout_content))
+		return_data = PassingData(commandline=commandline, output_stdout=output_stdout, output_stderr=output_stderr,\
+								stderr_content=stderr_content, stdout_content=stdout_content)
 		return return_data
 	
 	display_job_var_name_ls = ['id', 'short_name', 'username', 'state_id', 'queue_id', 'no_of_nodes',\
@@ -562,7 +754,7 @@ class hpc_cmb_pbs(object):
 						'queue_id':('queue', str),
 						'no_of_nodes':('#nodes', int),
 						'ppn': ('ppn', int),
-						'see_output_while_running': ('error_merged', bool)}
+						'see_output_while_running': ('runtime_output', bool)}
 	
 	def construct_job_label_and_type_ls(self):
 		self._display_job_label_ls = []
@@ -589,12 +781,14 @@ class hpc_cmb_pbs(object):
 	
 	display_job_label_ls = property(display_job_label_ls)
 	
-	def refresh(self, username=None, update_node_info=False, jobs_since=None, liststore=None):
+	def refresh(self, username=None, update_node_info=False, jobs_since=None, only_running=False):
 		"""
+		2008-11-04
+			add job_log info into list_2d only if there is logs from database.
 		2008-11-02
 			return a 2d list of job information
 		"""
-		job_id_set = self.updateDB(username, update_node_info, jobs_since)
+		job_id_set = self.updateDB(username, update_node_info, jobs_since, only_running)
 		job_id_ls = list(job_id_set)
 		job_id_ls.sort()
 		list_2d = []
@@ -604,7 +798,10 @@ class hpc_cmb_pbs(object):
 				row = []
 				for var_name in self.display_job_var_name_ls:
 					row.append(getattr(job, var_name, None))
-				job_log = job.job_log_ls[-1]
+				if job.job_log_ls:	#make sure it has logs
+					job_log = job.job_log_ls[-1]
+				else:
+					job_log = None
 				for var_name in self.display_job_log_var_name_ls:
 					row.append(getattr(job_log, var_name, None))
 				list_2d.append(row)
