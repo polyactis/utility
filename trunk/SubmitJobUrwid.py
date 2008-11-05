@@ -151,34 +151,40 @@ class SubmitJobUrwid:
 				qsub_option, ppn=None, workdir=None, walltime=None, runtime_output_stdout=False,\
 				source_bash=True):
 		"""
+		2008-11-04
+			return the content of the job
 		2008-11-03
 			refactor submit_single_job() to allow hpc_cmb_pbs.py to be able to call this function
 		"""
-		jobf = open(job_fname, 'w')
-		jobf.write("#!/bin/sh\n")
+		content_lines = "#!/bin/sh\n"
 		
 		if qsub_option:
-			jobf.write("#PBS %s\n"%qsub_option)
+			content_lines+="#PBS %s\n"%qsub_option
 		if walltime:
-			jobf.write("#PBS -l walltime=%s\n"%walltime)
+			content_lines+="#PBS -l walltime=%s\n"%walltime
 		if workdir:
-			jobf.write("#PBS -d %s\n"%workdir)
+			content_lines+="#PBS -d %s\n"%workdir
 		#see output while running
 		if runtime_output_stdout:
-			jobf.write("#PBS -k eo\n")
+			content_lines+="#PBS -k eo\n"
 		
 		if no_of_nodes>0 and ppn:
-			jobf.write("#PBS -l nodes=%s:myri:ppn=%s\n"%(no_of_nodes, ppn))
+			content_lines+="#PBS -l nodes=%s:myri:ppn=%s\n"%(no_of_nodes, ppn)
 		
 		if source_bash:
-			jobf.write("source ~/.bash_profile\n")
+			content_lines+="source ~/.bash_profile\n"
 		
-		jobf.write("date\n")
-		jobf.write('echo COMMANDLINE: "%s"\n'%job_content)
-		jobf.write('%s\n'%job_content)
-		jobf.write("date\n")
+		content_lines+="date\n"
+		content_lines+='echo COMMANDLINE: "%s"\n'%job_content
+		content_lines+='%s\n'%job_content
+		content_lines+="date\n"
+		
+		jobf = open(job_fname, 'w')
+		
+		jobf.write(content_lines)
 		jobf.close()
-		return 0
+		return content_lines
+	
 	write_job_to_file = classmethod(write_job_to_file)
 	
 	def submit_single_job(self, single_job):
