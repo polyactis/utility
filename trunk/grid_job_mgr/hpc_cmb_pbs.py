@@ -96,7 +96,7 @@ class hpc_cmb_pbs(object):
 				single_job = ''
 		else:	#2008-11-03 de-novo submission
 			for single_job in job_content_io:	#each line is a job
-				return_code = SubmitJobUrwid.write_job_to_file(single_job, self.tmp_fname, no_of_nodes, \
+				content_lines = SubmitJobUrwid.write_job_to_file(single_job, self.tmp_fname, no_of_nodes, \
 															qsub_option, ppn=ppn, workdir=workdir, \
 															walltime=walltime, runtime_output_stdout=runtime_output_stdout)
 				job_basename = '%s%s'%(job_fprefix, job_starting_number)
@@ -112,7 +112,7 @@ class hpc_cmb_pbs(object):
 						job_state = JobDB.JobState(short_name=state_id)
 					job.job_state = job_state
 					job.job_fname = job_fname
-					job.content = single_job
+					job.content = content_lines	#2008-11-04 don't use single_job. content_lines includes PBS directives and etc.
 					
 					job.username = self.cluster_username
 					job.queue_id = queue
@@ -163,10 +163,13 @@ class hpc_cmb_pbs(object):
 		2008-11-01
 		"""
 		commandline = 'qdel %s'%(job_id)
-		command_out = self.runRemoteCommand(commandline)
+		command_out = self.runRemoteCommand(commandline, report_stdout=True)
 		job = JobDB.Job.get(job_id)
-		if command_out.output_stdout:
-			sys.stderr.write("qdel stdout: %s.\n"%( command_out.output_stdout.read()))
+		job.how_job_ended_id = 'killed'
+		self.db.session.flush()
+		
+		if command_out.stdout_content:
+			sys.stderr.write("qdel stdout: %s.\n"%( command_out.stdout_content))
 		sys.stderr.write("Job %s (%s) killed.\n"%(job_id, job.short_name))
 		
 	def get_job(self, job_id):
@@ -198,10 +201,20 @@ class hpc_cmb_pbs(object):
 		return job_id_ls
 	
 	
-	node_var_name_set = Set(['arch', 'opsys', 'uname', 'totmem', 'physmem', 'size', 'rectime'])
-	nodelog_var_name_set = Set(['nsessions', 'nusers', 'idletime', 'availmem', 'loadave', 'netload', 'size', 'rectime'])
+	node_var_name_set = Set(['arch', 'opsys', 'uname', 'totmem', 'physmem'])
+	nodelog_var_name2type = {'nsessions':int,
+							'nusers':int,
+							'idletime':int,
+							'availmem':str,
+							'loadave':float,
+							'netload':float,
+							'size':str,
+							'rectime':int}
 	def getNodeStatus(self, node, status_value, node_state, further_check_node):
 		"""
+		2008-11-7 to cast the type for each field.
+				elixir can cast the type for you. but the objects resident in the session still have un-casted values
+				which causes a problem when the same program gets that object from session pool rather than from db.
 		2008-11-01
 			parse the 'status' property of a node info in pbsnodes output
 			
@@ -233,18 +246,24 @@ class hpc_cmb_pbs(object):
 					job_id_ls = map(self.getJobIDFromFullName, job_id_ls)
 			elif status_item_key in self.node_var_name_set:
 				setattr(node, status_item_key, status_item_value)
-			elif status_item_key in self.nodelog_var_name_set:
+			elif status_item_key in self.nodelog_var_name2type:
+				status_item_type = self.nodelog_var_name2type[status_item_key]	#2008-11-7 to cast the type for each field.
+					#elixir can cast the type for you. but the objects resident in the session still have un-casted values
+					#which causes a problem when the same program gets that object from session pool rather than from db.
 				if further_check_node:
 					if nodelog is None:
 						nodelog = JobDB.NodeLog()
 						nodelog.node = node
 						nodelog.state = node_state
-					setattr(nodelog, status_item_key, status_item_value)
+					setattr(nodelog, status_item_key, status_item_type(status_item_value))
 		
 		return job_id_ls, nodelog
 	
-	def updateOneNode(self, block, job_id_set, job_id2current_nodelog_id_ls):
+	def updateOneNode(self, block=None, job_id_set=None, job_id2current_nodelog_id_ls=None, machine_id=None, getNodeLog=False):
 		"""
+		2008-11-07
+			in case that block is None, get it by running 'pbsnodes -a %s'%machine_id
+			
 		2008-11-01
 			1. store the node into Node if it's new
 			2. store node status info into NodeLog if it has a job in job_id_set
@@ -267,7 +286,15 @@ class hpc_cmb_pbs(object):
 			8967252kb:69053492kb,state=free,jobs=4759956.hpc-pbs.usc.edu,rectime=1225674376
 			     note = E2119 error. Jobs running (07/11)
 		"""
-		machine_id = block[0].strip()
+		if not block and machine_id:
+			commandline = 'pbsnodes -a %s'%machine_id
+			command_out = self.runRemoteCommand(commandline, report_stderr=True)
+			block = command_out.output_stdout
+		elif block:
+			machine_id = block[0].strip()
+		else:
+			sys.stderr.write("block is nothing and machine_id is not specified. can't update node info.\n")
+			return
 		if self.debug:
 			sys.stderr.write("Checking node %s ... \n"%machine_id)
 		arch = None
@@ -305,22 +332,24 @@ class hpc_cmb_pbs(object):
 					for job in job_list:
 						cpu_no, job_id = job.split('/')
 						job_id = int(job_id.split('.')[0])
-						if job_id in job_id_set:
+						if job_id_set and job_id in job_id_set:
 							further_check_node=1
 				elif key == 'status':
 					status_value = value
 				elif key =='state':
 					node_state = value
 		
-		
+		if getNodeLog:	#2008-11-07, no matter what further_check_node is, if getNodeLog is True, further_check_node=1
+			further_check_node = 1
 		if (further_check_node or getattr(node, 'date_created', None) is None) and status_value:
 			job_id_ls, nodelog = self.getNodeStatus(node, status_value, node_state, further_check_node)
 			self.db.session.save_or_update(node)
 			if further_check_node and nodelog:	#don't check it if not further_check_node (no username's jobs on this node)
 				self.db.session.save_or_update(nodelog)
 				self.db.session.flush()
-				for job_id in job_id_ls:
-					job_id2current_nodelog_id_ls[job_id] = nodelog.id
+				if job_id2current_nodelog_id_ls:
+					for job_id in job_id_ls:
+						job_id2current_nodelog_id_ls[job_id] = nodelog.id
 		
 		elif node.ncpus and node.arch:
 			self.db.session.save_or_update(node)
@@ -332,7 +361,7 @@ class hpc_cmb_pbs(object):
 			sys.stderr.write("Done.\n")
 		return bad_machine_id
 	
-	def updateNodeInDB(self, job_id_set):
+	def updateNodesInDB(self, job_id_set):
 		"""
 		2008-11-01
 			run 'pbsnodes -a' to check node information
@@ -341,7 +370,7 @@ class hpc_cmb_pbs(object):
 		if self.debug:
 			sys.stderr.write("Updating node information in db ... \n")
 		commandline = 'pbsnodes -a'
-		command_out = self.runRemoteCommand(commandline, report_stderr=False)
+		command_out = self.runRemoteCommand(commandline, report_stderr=True)
 		
 		job_id2current_nodelog_id_ls = {}
 		block = []
@@ -478,6 +507,17 @@ class hpc_cmb_pbs(object):
 		if job.state_id=='C':	#job is done, very rare to happen right when executing 'qstat -f job_id'
 			job.time_finished = datetime.now()
 		
+		self.updateJob2Node(job, job_key2value)
+		
+		#for nodelog_id in current_nodelog_id_ls:
+		if self.debug:
+			sys.stderr.write("Done.\n")
+	
+	def updateJob2Node(self, job, job_key2value):
+		"""
+		2008-11-07
+			refactor out of fillInNewJob() so that updateOneJobInDB() could call it as well.
+		"""
 		exec_host = job_key2value.get('exec_host')
 		if exec_host:	#2008-11-04 it could be none if it's not running
 			node_cpus = exec_host.split('+')
@@ -489,13 +529,11 @@ class hpc_cmb_pbs(object):
 					node_set.add(node_name)
 					job2node = JobDB.Job2Node(node=node, job=job)
 					job.nodes.append(job2node)
-		
-		#for nodelog_id in current_nodelog_id_ls:
-		if self.debug:
-			sys.stderr.write("Done.\n")
 	
-	def updateOneJobInDB(self, job_id, username):
+	def updateOneJobInDB(self, job_id, qstat_for_one_job=None, username=None):
 		"""
+		2008-11-07
+			if qstat_for_one_job is None, get it by running 'qstat -f %s'%(job_id)
 		2008-11-04
 			if it's a running job and already in db, update job_stdout only when job_stdout_fname has changed since the last time its info in db was updated.
 			ditto for job_stderr
@@ -525,10 +563,13 @@ class hpc_cmb_pbs(object):
 		elif job.state_id=='C':	#job in db and complete. do nothing and return
 			return
 		is_job_completed = 0
-		commandline = 'qstat -f %s'%(job_id)
-		command_out = self.runRemoteCommand(commandline)
-		output_stdout = command_out.output_stdout.read()
-		if output_stdout and not command_out.stderr_content:	#2008-11-02 this job still exists and no error
+		if not qstat_for_one_job:
+			commandline = 'qstat -f %s'%(job_id)
+			command_out = self.runRemoteCommand(commandline)
+			output_stdout = command_out.output_stdout.read()
+		else:
+			output_stdout = qstat_for_one_job
+		if output_stdout:	#2008-11-02 this job still exists and no error
 			job_key2value = self.getJobKey2Value(StringIO.StringIO(output_stdout))
 			if job.short_name is None:	#not in db yet
 				self.fillInNewJob(job, job_key2value, username)
@@ -551,7 +592,9 @@ class hpc_cmb_pbs(object):
 							if (not job.date_updated and job.date_created and job.date_created<time_of_last_change) or \
 									(job.date_updated and job.date_updated<time_of_last_change):	#condition to fetch the content
 								job.job_stderr = self.fetch_file_content(job.job_stderr_fname)
-			
+				if not job.nodes:
+					self.updateJob2Node(job, job_key2value)
+					
 			job_log = JobDB.JobLog()
 			job_log.job = job
 			job_log.cput = job_key2value.get('resources_used.cput')
@@ -628,26 +671,47 @@ class hpc_cmb_pbs(object):
 	def updateJobsInDB(self, job_id_set, username):
 		"""
 		2008-11-04
-			a function to qstat all jobs at once, not yet finished
+			a function to qstat all the jobs that are either not in db or not in state 'C'  at once
 		"""
 		commandline = 'qstat -f '
 		for job_id in job_id_set:
-			commandline += '%s'%(str(job_id))
+			job = JobDB.Job.get(job_id)
+			if (job and job.state_id!='C') or job is None:	#don't check jobs that's been recorded as completed
+				commandline += ' %s'%(str(job_id))
 		
 		command_out = self.runRemoteCommand(commandline)
 		qstat_for_one_job = ''
+		current_job_id = None
+		tag = 'Job Id:'
+		
+		jobs_have_qstat = Set()
 		for line in command_out.output_stdout:
-			if line.find('Job Id:')==0:
+			job_id_label_start_index = line.find(tag)
+			if job_id_label_start_index==0:
+				
+				if qstat_for_one_job and current_job_id is not None:
+					self.updateOneJobInDB(current_job_id, qstat_for_one_job, username)
+					jobs_have_qstat.add(current_job_id)
+				#get the new current_job_id
+				job_id = self.getJobIDFromFullName(line[job_id_label_start_index+len(tag):].strip())
+				current_job_id = job_id
 				
 				qstat_for_one_job = line
 			else:
 				qstat_for_one_job += line
 			
 		if qstat_for_one_job:
-			pass
+			self.updateOneJobInDB(current_job_id, qstat_for_one_job, username)
+			jobs_have_qstat.add(current_job_id)
 		
-	def updateDB(self, username=None, update_node_info=False, jobs_since=None, only_running=False):
+		for job_id in job_id_set-jobs_have_qstat:
+			pass
+			self.updateOneJobInDB(job_id, None, username)
+	
+	def updateDB(self, username=None, update_node_info=False, jobs_since=None, only_running=False, update_job_info=True):
 		"""
+		2008-11-06
+			add option update_job_info (default = True)
 		2008-11-04
 			add only_running
 			fix jobs_since
@@ -674,11 +738,13 @@ class hpc_cmb_pbs(object):
 		
 		job_id_set = Set(job_id_ls + job_id_in_queue)
 		if update_node_info:
-			job_id2current_nodelog_id_ls = self.updateNodeInDB(job_id_set)
+			job_id2current_nodelog_id_ls = self.updateNodesInDB(job_id_set)
 		else:
 			job_id2current_nodelog_id_ls = None
-		for job_id in job_id_set:
-			self.updateOneJobInDB(job_id, username)
+		if update_job_info:
+			#self.updateJobsInDB(job_id_set, username)
+			for job_id in job_id_set:
+				self.updateOneJobInDB(job_id, username=username)
 		sys.stderr.write("Done.\n")
 		return job_id_set
 		
@@ -720,6 +786,8 @@ class hpc_cmb_pbs(object):
 		
 	def runLocalCommand(self, commandline, report_stderr=True, report_stdout=False):
 		"""
+		2008-11-07
+			command_handler.communicate() is more stable than command_handler.stderr.read()
 		2008-11-04
 			refactor out of runRemoteCommand()
 			
@@ -727,26 +795,54 @@ class hpc_cmb_pbs(object):
 		"""
 		command_handler = subprocess.Popen(commandline, shell=True, \
 										stderr=subprocess.PIPE, stdout=subprocess.PIPE)
-		output_stdout = command_handler.stdout
-		output_stderr = command_handler.stderr
+		#command_handler.wait() #Warning: This will deadlock if the child process generates enough output to a stdout or stderr pipe such that it blocks waiting for the OS pipe buffer to accept more data. Use communicate() to avoid that.
+		
+		#command_handler.stderr.read() command_handler.stdout.read() also constantly deadlock the whole process.
+		
 		stderr_content = None
 		stdout_content = None
-		if report_stderr:
-			stderr_content = output_stderr.read()
-			if stderr_content:
-				sys.stderr.write('stderr of %s: %s \n'%(commandline, stderr_content))
+		
+		stdout_content, stderr_content = command_handler.communicate()	#to circumvent deadlock caused by command_handler.stderr.read()
+		
+		output_stdout = None
+		output_stderr = None
+		if not report_stdout:	#if not reporting, assume the user wanna to have a file handler returned
+			output_stdout = StringIO.StringIO(stdout_content)
+		if not report_stderr:
+			output_stderr = StringIO.StringIO(stderr_content)
+		
 		if report_stdout:
-			stdout_content = output_stdout.read()
-			if stdout_content:
-				sys.stderr.write('stdout of %s: %s \n'%(commandline, stdout_content))
+			sys.stderr.write('stdout of %s: %s \n'%(commandline, stdout_content))
+		
+		if report_stderr:
+			sys.stderr.write('stderr of %s: %s \n'%(commandline, stderr_content))
+		
 		return_data = PassingData(commandline=commandline, output_stdout=output_stdout, output_stderr=output_stderr,\
 								stderr_content=stderr_content, stdout_content=stdout_content)
 		return return_data
 	
-	display_job_var_name_ls = ['id', 'short_name', 'username', 'state_id', 'queue_id', 'no_of_nodes',\
+	def log_into_node(self, node_id):
+		"""
+		2008-11-07
+			function to log into a specific node
+			
+			'-t' in ssh does "Force pseudo-tty allocation.". without this, can't do double-machine ssh
+		"""
+		commandline = 'gnome-terminal -e "ssh -t %s@%s ssh %s"'%\
+				(self.cluster_username, self.cluster_main_node, node_id)
+		command_handler = subprocess.Popen(commandline, shell=True, \
+										stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+		
+	
+	display_job_var_name_ls = ['id', 'short_name', 'username', 'how_job_ended_id', 'state_id', 'queue_id', 'no_of_nodes',\
 							'ppn', 'memory', 'walltime', 'see_output_while_running', 'time_submitted', 'time_started', 'time_finished']
 	
 	display_job_log_var_name_ls = ['cput', 'mem_used', 'vmem_used','walltime_used']
+	
+	#variables to be displayed in the GUI related to node information
+	display_node_var_name_ls = ['short_name', 'ncpus', 'arch', 'opsys', 'totmem', 'physmem']
+	display_node_log_var_name_ls = ['availmem', 'loadave', 'netload', 'idletime', 'state', 'nsessions', 'nusers', 'size', 'rectime', 'date_created']
+	
 	
 	var_name2label_type = {'id':('job_id', int),
 						'short_name':('job_name', str),
@@ -754,9 +850,21 @@ class hpc_cmb_pbs(object):
 						'queue_id':('queue', str),
 						'no_of_nodes':('#nodes', int),
 						'ppn': ('ppn', int),
-						'see_output_while_running': ('runtime_output', bool)}
+						'see_output_while_running': ('runtime_output', bool),
+						'how_job_ended_id':('how_job_ended', str),
+						'ncpus':('ncpus', int),
+						'loadave':('loadave', float),
+						'netload':('netload', float),
+						'idletime':('idletime', int),
+						'nsessions':('nsessions', int),
+						'nusers':('nusers', int),
+						'rectime':('rectime', int)}
 	
-	def construct_job_label_and_type_ls(self):
+	def construct_label_and_type_ls(self):
+		"""
+		2008-11-07
+			construct the label_ls and label_type_ls also for node information
+		"""
 		self._display_job_label_ls = []
 		self._display_job_label_type_ls = []
 		for var_name in self.display_job_var_name_ls + self.display_job_log_var_name_ls:
@@ -767,28 +875,49 @@ class hpc_cmb_pbs(object):
 				type = str
 			self._display_job_label_ls.append(label)
 			self._display_job_label_type_ls.append(type)
+		
+		self._display_node_label_ls = []
+		self._display_node_label_type_ls = []
+		for var_name in self.display_node_var_name_ls + self.display_node_log_var_name_ls:
+			if var_name in self.var_name2label_type:
+				label, type = self.var_name2label_type[var_name]
+				if var_name=='short_name':	#label for short_name in self.var_name2label_type is for jobs.
+					label = 'node'
+			else:
+				label = var_name
+				type = str
+			self._display_node_label_ls.append(label)
+			self._display_node_label_type_ls.append(type)
 	
 	def display_job_label_type_ls(self):
+		"""
+		2008-11-07
+			convenient function for the GUI to call
+		"""
 		if getattr(self, '_display_job_label_type_ls', None) is None:
-			self.construct_job_label_and_type_ls()
+			self.construct_label_and_type_ls()
 		return self._display_job_label_type_ls
 	display_job_label_type_ls = property(display_job_label_type_ls)
 	
 	def display_job_label_ls(self):
+		"""
+		2008-11-07
+			convenient function for the GUI to call
+		"""
 		if getattr(self, '_display_job_label_ls', None) is None:
-			self.construct_job_label_and_type_ls()
+			self.construct_label_and_type_ls()
 		return self._display_job_label_ls
 	
 	display_job_label_ls = property(display_job_label_ls)
 	
-	def refresh(self, username=None, update_node_info=False, jobs_since=None, only_running=False):
+	def refresh(self, username=None, update_node_info=False, jobs_since=None, only_running=False, update_job_info=True):
 		"""
 		2008-11-04
 			add job_log info into list_2d only if there is logs from database.
 		2008-11-02
 			return a 2d list of job information
 		"""
-		job_id_set = self.updateDB(username, update_node_info, jobs_since, only_running)
+		job_id_set = self.updateDB(username, update_node_info, jobs_since, only_running, update_job_info)
 		job_id_ls = list(job_id_set)
 		job_id_ls.sort()
 		list_2d = []
@@ -806,7 +935,82 @@ class hpc_cmb_pbs(object):
 					row.append(getattr(job_log, var_name, None))
 				list_2d.append(row)
 		return list_2d
+	
+	def mark_one_job_wrong(self, job_id, how_job_ended_id='wrong'):
+		"""
+		2008-11-05
+			not just mark the job 'wrong', could mark it 'killed'
+		"""
+		if not how_job_ended_id:
+			how_job_ended_id='wrong'
+		job = JobDB.Job.get(job_id)
+		if job:
+			job.how_job_ended_id=how_job_ended_id
+			self.db.session.flush()
+			sys.stderr.write("Job %s (%s) marked as wrong.\n"%(job_id, job.short_name))
+	
+	
+	def display_node_label_type_ls(self):
+		if getattr(self, '_display_node_label_type_ls', None) is None:
+			self.construct_label_and_type_ls()
+		return self._display_node_label_type_ls
+	display_node_label_type_ls = property(display_node_label_type_ls)
+	
+	def display_node_label_ls(self):
+		if getattr(self, '_display_node_label_ls', None) is None:
+			self.construct_label_and_type_ls()
+		return self._display_node_label_ls
+	display_node_label_ls = property(display_node_label_ls)
 
+	def returnNodeInfoGivenJobs(self, job_id_ls):
+		"""
+		2008-11-07
+			return information of nodes given a list of job ids
+			
+			if that job doesn't have nodes information, update that job
+			
+			for each node related to a non-completed job, update node log information
+		"""
+		sys.stderr.write("Getting node information for %s ...\n"%repr(job_id_ls))
+		list_2d = []
+		for job_id in job_id_ls:
+			job = JobDB.Job.get(job_id)
+			if job:
+				if not job.nodes:	#this job doesn't have job2node. update it to have one. only works for jobs whose state is not 'C'
+					self.updateOneJobInDB(job_id, username=self.cluster_username)
+				
+				for job2node in job.nodes:
+					node = job2node.node
+					if job.state_id!='C':	#if a job is completed, don't fetch the node log.
+						bad_machine_id = self.updateOneNode(machine_id=node.short_name, getNodeLog=True)
+						if bad_machine_id:
+							sys.stderr.wrong("Node %s is down.\n"%bad_machine_id)
+					row = []
+					for var_name in self.display_node_var_name_ls:
+						row.append(getattr(node, var_name, None))
+					if node.log_ls:	#make sure it has logs
+						node_log = node.log_ls[-1]
+					else:
+						node_log = None
+					for var_name in self.display_node_log_var_name_ls:
+						label_type_tup = self.var_name2label_type.get(var_name)
+						if label_type_tup:	#if type is specified, liststore won't tolerate None
+							if label_type_tup[1]==int:
+								var_content = getattr(node_log, var_name, 0)
+								if var_content is None:
+									var_content = 0
+								row.append(var_content)
+							elif label_type_tup[1]==float:
+								var_content = getattr(node_log, var_name, 0.0)
+								if var_content is None:
+									var_content = 0.0
+								row.append(var_content)
+						else:
+							row.append(getattr(node_log, var_name, ''))
+					list_2d.append(row)
+		sys.stderr.write("Done.\n")
+		return list_2d
+	
 if __name__ == '__main__':
 	from pymodule import ProcessOptions
 	main_class = hpc_cmb_pbs
