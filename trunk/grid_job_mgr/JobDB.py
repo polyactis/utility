@@ -63,6 +63,7 @@ class JobState(Entity):
 class Job(Entity):
 	id = Field(Integer, primary_key=True)
 	short_name = Field(String(2048))
+	how_job_ended = ManyToOne("JobState", colname='how_job_ended_id', ondelete='CASCADE', onupdate='CASCADE')
 	job_state = ManyToOne("JobState", colname='state_id', ondelete='CASCADE', onupdate='CASCADE')
 	content = Field(Binary(134217728), deferred=True)
 	job_fname = Field(Text)
@@ -70,6 +71,7 @@ class Job(Entity):
 	job_stderr = Field(Binary(134217728), deferred=True)
 	job_stdout_fname = Field(Text)
 	job_stderr_fname = Field(Text)
+	
 	username = Field(String(256))
 	
 	queue = ManyToOne("NodeProperty", colname='queue_id', ondelete='CASCADE', onupdate='CASCADE')
@@ -166,6 +168,7 @@ class Node(Entity):
 	
 	#jobs = ManyToMany('Job', tablename='job2node', ondelete='CASCADE', onupdate='CASCADE')
 	jobs = OneToMany("Job2Node")
+	log_ls = OneToMany("NodeLog")
 	created_by = Field(String(200))
 	updated_by = Field(String(200))
 	date_created = Field(DateTime, default=datetime.now)
