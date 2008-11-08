@@ -156,11 +156,11 @@ class grid_job_mgr(object):
 		
 		
 		self.menu_job_right_click = gtk.Menu()	#xml.get_widget('menu_job_right_click')
-		self.construct_menu_job_right_click()
+		self.construct_menu_job_right_click(self.menu_job_right_click)
 		#self.treeview1.connect('popup-menu', self.popup_menu_cb, self.menu_job_right_click)	#popup-menu is only for statusicon
 		
 		self.menu_node_right_click = gtk.Menu()
-		self.construct_menu_node_right_click()
+		self.construct_menu_node_right_click(self.menu_node_right_click)
 		
 		self.app1.show_all()
 		
@@ -577,8 +577,10 @@ class grid_job_mgr(object):
 			sys.stdout = sys.__stdout__
 			sys.stderr = sys.__stderr__
 	
-	def construct_menu_job_right_click(self):
+	def construct_menu_job_right_click(self, menu_job_right_click):
 		"""
+		2008-11-07
+			add a 3rd menu 'resubmit this job'
 		2008-11-06
 			construct a popup menu for the right click on a job entry
 		"""
@@ -587,10 +589,14 @@ class grid_job_mgr(object):
 		menuItem.connect('activate', self.show_nodes_of_this_job)
 		#sm = gtk.Menu()
 		#menuItem.set_submenu(sm)
-		self.menu_job_right_click.append(menuItem)
+		menu_job_right_click.append(menuItem)
 		menuItem2 = gtk.MenuItem('show stdout/err')
 		menuItem2.connect('activate', self.on_button_check_stdouterr_clicked)
-		self.menu_job_right_click.append(menuItem2)
+		menu_job_right_click.append(menuItem2)
+		
+		menuItem3 = gtk.MenuItem('resubmit this job')
+		menuItem3.connect('activate', self.on_button_resubmit_clicked)
+		menu_job_right_click.append(menuItem3)
 		
 		#sm.append(menuItem2)
 		#menu.append(menuItem)
@@ -600,7 +606,7 @@ class grid_job_mgr(object):
 		#statusIcon.connect('popup-menu', popup_menu_cb, menu)
 		#statusIcon.set_visible(True)
 	
-	def construct_menu_node_right_click(self):
+	def construct_menu_node_right_click(self, menu_node_right_click):
 		"""
 		2008-11-06
 			construct a popup menu for the right click on a job entry
@@ -608,7 +614,7 @@ class grid_job_mgr(object):
 		
 		menuItem = gtk.MenuItem('log into this node')
 		menuItem.connect('activate', self.log_into_node)
-		self.menu_node_right_click.append(menuItem)
+		menu_node_right_click.append(menuItem)
 	
 	def get_selected_job_id_ls(self):
 		"""
