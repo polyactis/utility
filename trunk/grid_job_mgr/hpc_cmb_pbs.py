@@ -212,6 +212,8 @@ class hpc_cmb_pbs(object):
 							'rectime':int}
 	def getNodeStatus(self, node, status_value, node_state, further_check_node):
 		"""
+		2008-11-12
+			upon type coersion failure according to nodelog_var_name2type, set the value of nodelog to None
 		2008-11-7 to cast the type for each field.
 				elixir can cast the type for you. but the objects resident in the session still have un-casted values
 				which causes a problem when the same program gets that object from session pool rather than from db.
@@ -255,7 +257,13 @@ class hpc_cmb_pbs(object):
 						nodelog = JobDB.NodeLog()
 						nodelog.node = node
 						nodelog.state = node_state
-					setattr(nodelog, status_item_key, status_item_type(status_item_value))
+					try:
+						value = status_item_type(status_item_value)
+					except:
+						traceback.print_exc()
+						sys.stderr.write('%s.\n'%repr(sys.exc_info()))
+						value = None
+					setattr(nodelog, status_item_key, value)
 		
 		return job_id_ls, nodelog
 	
