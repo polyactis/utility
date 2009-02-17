@@ -579,6 +579,8 @@ class grid_job_mgr(object):
 	
 	def construct_menu_job_right_click(self, menu_job_right_click):
 		"""
+		2009-2-16
+			add menuitem 'show when this job starts/ed'
 		2008-11-07
 			add a 3rd menu 'resubmit this job'
 		2008-11-06
@@ -597,6 +599,10 @@ class grid_job_mgr(object):
 		menuItem3 = gtk.MenuItem('resubmit this job')
 		menuItem3.connect('activate', self.on_button_resubmit_clicked)
 		menu_job_right_click.append(menuItem3)
+		
+		menuItem4 = gtk.MenuItem('show when this job starts/ed')
+		menuItem4.connect('activate', self.showstartJob)
+		menu_job_right_click.append(menuItem4)
 		
 		#sm.append(menuItem2)
 		#menu.append(menuItem)
@@ -672,7 +678,20 @@ class grid_job_mgr(object):
 		if event.button==3:	#2 is middle button. 3 is right button.
 			self.menu_node_right_click.show_all()
 			self.menu_node_right_click.popup(None, None, None, event.button, event.time)
-		
+	
+	def showstartJob(self, widget, event=None, data=None):
+		"""
+		2009-2-16
+			to get to know when the job will start
+		"""
+		pathlist = []
+		self.treeselection.selected_foreach(yh_gnome.foreach_cb, pathlist)
+		if len(pathlist) >0:
+			for i in range(len(pathlist)):
+				job_id = self.liststore[pathlist[i][0]][0]
+				showstart_output = self.backend_ins.showstartJob(job_id)
+				print showstart_output.read()
+	
 if __name__ == '__main__':
 	prog = gnome.program_init('ClusterJobManager', '0.1')
 	instance = grid_job_mgr()
