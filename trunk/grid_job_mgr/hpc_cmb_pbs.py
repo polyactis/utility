@@ -1019,6 +1019,15 @@ class hpc_cmb_pbs(object):
 		sys.stderr.write("Done.\n")
 		return list_2d
 	
+	def showstartJob(self, job_id):
+		"""
+		2009-2-16
+			execute "showstart job_id" on server to know when the job will start
+		"""
+		commandline = 'showstart %s'%job_id
+		command_out = self.runRemoteCommand(commandline)
+		return command_out.output_stdout
+	
 if __name__ == '__main__':
 	from pymodule import ProcessOptions
 	main_class = hpc_cmb_pbs
