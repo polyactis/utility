@@ -18,13 +18,14 @@ import gnome	#2008-11-01 for new gnome related features
 import gnome.ui
 import gnomecanvas
 
-import gtk, gtk.glade
+import gtk, gtk.glade, gobject
 
 from pymodule import yh_gnome
 #simport foreach_cb, create_columns, fill_treeview
 from cmb_cluster import cmb_cluster
 from hpc_cmb_pbs import hpc_cmb_pbs
 from datetime import datetime
+from NodeStatusWindow import NodeStatusWindow
 
 class grid_job_mgr(object):
 	def __init__(self):
@@ -40,9 +41,10 @@ class grid_job_mgr(object):
 		program_path = os.path.dirname(sys.argv[0])
 		xml = gtk.glade.XML(os.path.join(program_path, 'grid_job_mgr.glade'))
 		xml.signal_autoconnect(self)
+		self.xml = xml
 		self.app1 = xml.get_widget("app1")
 		self.app1.connect("destroy", self.destroy)
-		self.app1.set_size_request(1000,800)		
+		self.app1.set_size_request(1000,800)
 		
 		self.app1_appbar1 = xml.get_widget('app1_appbar1')
 		self.app1_appbar1.push('Status Message.')	#import gnome.ui has to be executed.
@@ -51,13 +53,19 @@ class grid_job_mgr(object):
 		self.treeview1 = xml.get_widget("treeview1")
 		self.treeselection = self.treeview1.get_selection()
 		self.treeview1.connect('row-activated', self.show_stdouterr)
-		self.treeview1.connect('button-release-event', self.job_rows_selected, self.app1_appbar1)
+		self.menu_job_right_click = gtk.Menu()	#xml.get_widget('menu_job_right_click')
+		self.construct_menu_job_right_click(self.menu_job_right_click)
+		#self.treeview1.connect('popup-menu', self.popup_menu_cb, self.menu_job_right_click)	#popup-menu is only for status icon
+		self.treeview1.connect('button-release-event', self.rows_selected, self.app1_appbar1, self.menu_job_right_click)
 		#self.treeview1.connect('cursor-changed', self.job_rows_selected, self.app1_appbar1)	#2008-11-06 'button-release-event' is better than 'cursor-changed'. the latter has a lag and display the #selected-rows one click ahead.
 		
 		self.treeview_nodes = xml.get_widget('treeview_nodes')
 		self.tree_nodes_selection = self.treeview_nodes.get_selection()
 		self.treeview_nodes.connect('row-activated', self.log_into_node)
-		self.treeview_nodes.connect('button-release-event', self.node_rows_selected, self.app1_appbar1)
+		self.menu_node_right_click = gtk.Menu()
+		self.construct_menu_node_right_click(self.menu_node_right_click)
+		self.treeview_nodes.connect('button-release-event', self.rows_selected, self.app1_appbar1, \
+								self.menu_node_right_click, 'node')
 		
 		self.combobox_backend_choice = xml.get_widget('combobox_backend_choice')
 		self.entry_username = xml.get_widget("entry_username")
@@ -96,7 +104,6 @@ class grid_job_mgr(object):
 		self.entry_job_starting_number = xml.get_widget("entry_job_starting_number")
 		self.entry_time = xml.get_widget("entry_time")	#05-22-05
 		
-
 		self.entry_no_of_nodes = xml.get_widget("entry_no_of_nodes")	#05-29-05
 		self.entry_ppn = xml.get_widget("entry_ppn")	#05-29-05
 		self.entry_node_range_submit = xml.get_widget("entry_node_range_submit")
@@ -154,17 +161,25 @@ class grid_job_mgr(object):
 		self.tvcolumn_dict = {}
 		self.cell_dict = {}
 		
+		self.node_queue_app = xml.get_widget("node_queue_app")
+		self.node_queue_app.connect("delete_event", yh_gnome.subwindow_hide)
+		self.node_queue_app.set_size_request(1000,800)	
+		self.node_queue_appbar = xml.get_widget('node_queue_appbar')
 		
-		self.menu_job_right_click = gtk.Menu()	#xml.get_widget('menu_job_right_click')
-		self.construct_menu_job_right_click(self.menu_job_right_click)
-		#self.treeview1.connect('popup-menu', self.popup_menu_cb, self.menu_job_right_click)	#popup-menu is only for statusicon
+		self.treeview_node_queue = xml.get_widget("treeview_node_queue")
+		self.treeview_node_queue.connect('row-activated', self.on_button_plot_node_status_clicked)
+		self.menu_node_queue_right_click = gtk.Menu()
+		self.construct_menu_node_queue_right_click(self.menu_node_queue_right_click)
+		self.treeview_node_queue.connect('button-release-event', self.rows_selected, self.node_queue_appbar, \
+										self.menu_node_queue_right_click, 'node')
 		
-		self.menu_node_right_click = gtk.Menu()
-		self.construct_menu_node_right_click(self.menu_node_right_click)
+		button_show_node_q_window = xml.get_widget('button_show_node_q_window')
+		button_show_node_q_window.connect('clicked', self.on_menuitem_show_node_q_window_activate)
 		
 		self.app1.show_all()
 		
-		
+		self.job_refresh_timeout_source_id = None
+		self.node_queue_refresh_timeout_source_id = None
 		#2008-11-05 connect stdout/stderr in the end to avoid masquerading the error output produced by bugs above
 		#sys.stdout = self.dummy_out		#2008-11-06 this will deadlocks the program sometimes when lots of stdout and stderr are being directed to it
 		#sys.stderr = self.dummy_err		
@@ -181,16 +196,63 @@ class grid_job_mgr(object):
 			self.ps_command = 'ps r'
 		print "ps_command is %s"%self.ps_command
 	
+	timedelta_pattern = re.compile(r'(\d+)([smhd])*')	# used to parse time interval. s=seconds, m=minutes, h=hours, d=days. Default is seconds.
+	
+	time_unit2milliseconds = {'s': 1000, 'm':60000, 'h': 3600000, 'd':86400000}
+	
+	def getTimeIntervalFromStr(self, interval_str):
+		"""
+		2009-11-10
+			parse time interval. like '20s', '20m', etc. s=seconds, m=minutes, h=hours, d=days.
+		"""
+		timedelta_p_search_result = self.timedelta_pattern.search(interval_str)
+		if timedelta_p_search_result:
+			interval_number, time_unit = timedelta_p_search_result.groups()[:2]
+			interval_number = int(interval_number)
+		else:
+			interval_number = 20
+			time_unit = 's'
+		if not time_unit:
+			time_unit = 's'
+		interval = self.time_unit2milliseconds[time_unit]*interval_number
+	
 	def on_button_refresh_clicked(self, button_refresh=None, data=None, update_job_info=None):
 		"""
+		2009-11-10
+			either call refreshJobs()
+			or setup a timeout function to call refreshJobs() periodically
 		03-20-05
 			fill in the treeview1
 			--create_columns()	on first refresh
 		"""
+		entry_job_refresh_interval = self.xml.get_widget("entry_job_refresh_interval")
+		togglebutton_refresh_on_demand = self.xml.get_widget("togglebutton_refresh_on_demand")	# 2009-11-10
+		if togglebutton_refresh_on_demand.get_active():
+			self.refreshJobs(button_refresh=button_refresh, data=data, update_job_info=update_job_info)
+		else:
+			self.refreshJobs(button_refresh=button_refresh, data=data, update_job_info=update_job_info)
+			
+			if self.job_refresh_timeout_source_id is not None:
+				gobject.source_remove(self.job_refresh_timeout_source_id)
+			interval = self.getTimeInterval(entry_job_refresh_interval.get_text())
+			self.job_refresh_timeout_source_id = gobject.timeout_add(interval, self.refreshJobs)
+	
+	def on_togglebutton_refresh_on_demand_toggled(self, widget, data=None):
+		"""
+		2009-11-10
+			remove the timeout function 
+		"""
+		if self.job_refresh_timeout_source_id is not None:
+			gobject.source_remove(self.job_refresh_timeout_source_id)
+	
+	def refreshJobs(self, button_refresh=None, data=None, update_job_info=None):
+		"""
+		2009-11-10
+			split out of on_button_refresh_clicked()
+		"""
 		if self.backend_ins is None:
 			sys.stderr.write("Backend is not selected yet! Select one.\n")
-			return
-		
+			return False	# 2009-11-10 to stop the timeout
 		
 		update_node_info = self.checkbutton_update_node_info.get_active()
 		if update_job_info is None:	#if it's none, get it from the checkbutton
@@ -237,6 +299,7 @@ class grid_job_mgr(object):
 		self.treeselection.set_mode(gtk.SELECTION_MULTIPLE)
 		"""
 		self.no_of_refreshes += 1
+		return True	#2009-11-10 return True in order for the timeout to continue
 		
 	def create_columns(self, label_list):
 		"""
@@ -512,27 +575,8 @@ class grid_job_mgr(object):
 				self.backend_ins.mark_one_job_wrong(job_id, how_job_ended_id)
 		
 		#update the job view in the main app by only fetching info from db without updating job info in db
-		self.on_button_refresh_clicked(update_job_info=False)
+		self.refreshJobs(update_job_info=False)
 	
-	def job_rows_selected(self, treeview, event, app1_appbar1=None, **keywords):
-		"""
-		2008-11-05
-			report in the appbar how many jobs has been selected
-			adapted from pymodule/QCVisualize.py
-		2008-02-12
-			to update the no_of_selected rows (have to double click a row to change a cursor if it's multiple selection)
-		"""
-		pathlist_strains1 = []
-		self.treeselection.selected_foreach(yh_gnome.foreach_cb, pathlist_strains1)
-		if app1_appbar1:
-			app1_appbar1.push("%s rows selected."%len(pathlist_strains1))
-		else:
-			self.app1_appbar1.push("%s rows selected."%len(pathlist_strains1))
-		
-		if event.button==3:	#2 is middle button. 3 is right button.
-			self.menu_job_right_click.show_all()
-			self.menu_job_right_click.popup(None, None, None, event.button, event.time)
-		#return True	#'return True' fired an event (probably button deemed pressed') to cause to the mouse to pick up the row and reorder it
 	
 	def on_button_refresh_job_stdout_clicked(self, widget, data=None):
 		"""
@@ -566,7 +610,7 @@ class grid_job_mgr(object):
 				self.dialog_job_stdout.set_title("Job %s (%s)"%(job.id, job.short_name))
 		
 		#update the job view in the main app by only fetching info from db without updating job info in db
-		#self.on_button_refresh_clicked(update_job_info=False)
+		#self.refreshJobs(update_job_info=False)
 	
 	def on_checkbutton_redirect_stdouterr_toggled(self, checkbutton):	
 		if checkbutton.get_active() == 1:
@@ -604,6 +648,10 @@ class grid_job_mgr(object):
 		menuItem4.connect('activate', self.showstartJob)
 		menu_job_right_click.append(menuItem4)
 		
+		menuItem4 = gtk.MenuItem('kill selected jobs')
+		menuItem4.connect('activate', self.on_button_kill_clicked)
+		menu_job_right_click.append(menuItem4)
+		
 		#sm.append(menuItem2)
 		#menu.append(menuItem)
 		
@@ -612,16 +660,37 @@ class grid_job_mgr(object):
 		#statusIcon.connect('popup-menu', popup_menu_cb, menu)
 		#statusIcon.set_visible(True)
 	
-	def construct_menu_node_right_click(self, menu_node_right_click):
+	def construct_menu_node_right_click(self, menu):
 		"""
 		2008-11-06
 			construct a popup menu for the right click on a job entry
 		"""
 		
-		menuItem = gtk.MenuItem('log into this node')
+		menuItem = gtk.MenuItem('Log into selected node(s)')
 		menuItem.connect('activate', self.log_into_node)
-		menu_node_right_click.append(menuItem)
+		menu.append(menuItem)
+		
+		menuItem = gtk.MenuItem('Add selected node(s) into checking queue')
+		menuItem.connect('activate', self.on_button_add_node_clicked)
+		menu.append(menuItem)
 	
+	def construct_menu_node_queue_right_click(self, menu):
+		"""
+		2009-11-10
+			the right-click menu for the treeview_node_queue.
+		"""
+		menuItem = gtk.MenuItem('Remove Selected Node(s)')
+		menuItem.connect('activate', self.on_button_remove_node_clicked)
+		menu.append(menuItem)
+		
+		menuItem = gtk.MenuItem('Plot Selected Node(s)')
+		menuItem.connect('activate', self.on_button_plot_node_status_clicked)
+		menu.append(menuItem)
+		
+		menuItem = gtk.MenuItem('Log into selected node(s)')
+		menuItem.connect('activate', self.log_into_node)
+		menu.append(menuItem)
+		
 	def get_selected_job_id_ls(self):
 		"""
 		2008-11-07
@@ -663,21 +732,32 @@ class grid_job_mgr(object):
 				data.show_all()
 				data.popup(None, None, None, 3, time)
 	
-	def node_rows_selected(self, treeview, event, app1_appbar1=None, **keywords):
+	def rows_selected(self, treeview, event, appbar=None, menu=None, item_name='row', **keywords):
 		"""
+		2009-11-11
+			expand it to deal with selection of all treeviews
 		2008-11-05
-			similar to job_rows_selected()
+			report in the appbar how many jobs has been selected
+			adapted from pymodule/QCVisualize.py
+		2008-02-12
+			to update the no_of_selected rows (have to double click a row to change a cursor if it's multiple selection)
 		"""
 		pathlist = []
-		self.tree_nodes_selection.selected_foreach(yh_gnome.foreach_cb, pathlist)
-		if app1_appbar1:
-			app1_appbar1.push("%s nodes selected."%len(pathlist))
-		else:
-			self.app1_appbar1.push("%s nodes selected."%len(pathlist))
+		treeview_selection = treeview.get_selection()
+		treeview_selection.selected_foreach(yh_gnome.foreach_cb, pathlist)
+		no_of_items = len(pathlist)
+		if no_of_items>1:
+			item_name += 's'
+		status_msg = "%s %s selected."%(no_of_items, item_name)
+		if appbar:
+			appbar.push(status_msg)
+		elif self.app1_appbar1:
+			self.app1_appbar1.push(status_msg)
 		
-		if event.button==3:	#2 is middle button. 3 is right button.
-			self.menu_node_right_click.show_all()
-			self.menu_node_right_click.popup(None, None, None, event.button, event.time)
+		if event.button==3 and menu is not None:	#2 is middle button. 3 is right button.
+			menu.show_all()
+			menu.popup(None, None, None, event.button, event.time)
+		#return True	#'return True' fired an event (probably button deemed pressed') to cause to the mouse to pick up the row and reorder it
 	
 	def showstartJob(self, widget, event=None, data=None):
 		"""
@@ -692,6 +772,95 @@ class grid_job_mgr(object):
 				showstart_output = self.backend_ins.showstartJob(job_id)
 				print showstart_output.read()
 	
+	def on_menuitem_show_node_q_window_activate(self, widget=None, data=None):
+		"""
+		2009-11-10
+			display the node_queue_app
+		"""
+		if self.backend_ins is None:
+			sys.stderr.write("Backend is not selected yet! Select one.\n")
+			return False	# 2009-11-10 to stop the timeout
+		
+		yh_gnome.create_columns(self.treeview_node_queue, self.backend_ins.display_node_label_ls)
+		self.liststore_node_queue = gtk.ListStore(*self.backend_ins.display_node_label_type_ls)
+		list_2d = self.backend_ins.returnQueueNodeInfo()
+		yh_gnome.fill_treeview(self.treeview_node_queue, self.liststore_node_queue, list_2d, reorderable=True, multi_selection=True)
+		self.node_queue_app.show_all()
+	
+	def on_button_add_node_clicked(self, widget, data=None):
+		"""
+		2009-11-10
+			add a node to the checking queue
+		"""
+		pathlist = []
+		self.tree_nodes_selection.selected_foreach(yh_gnome.foreach_cb, pathlist)
+		if len(pathlist) >0:
+			for i in range(len(pathlist)):
+				node_id = self.liststore_nodes[pathlist[i][0]][0]
+				self.backend_ins.addNodeToCheckingQueue(node_id)
+		
+		entry_node_id = self.xml.get_widget("entry_node_id")
+		self.backend_ins.addNodeToCheckingQueue(entry_node_id.get_text())
+		self.on_menuitem_show_node_q_window_activate()
+	
+	def on_button_remove_node_clicked(self, widget, data=None):
+		"""
+		2009-11-10
+			remove the node from the checking queue
+		"""
+		node_queue_selection = self.treeview_node_queue.get_selection()
+		pathlist = []
+		node_queue_selection.selected_foreach(yh_gnome.foreach_cb, pathlist)
+		if len(pathlist) >0:
+			for i in range(len(pathlist)):
+				node_id = self.liststore_node_queue[pathlist[i][0]][0]
+				self.backend_ins.removeNodeFromCheckingQueue(node_id)
+		self.on_menuitem_show_node_q_window_activate()
+		
+	def on_button_plot_node_status_clicked(self, widget=None, event=None, data=None):
+		"""
+		2009-11-10
+			pop up NodeStatusWindow to show status data of a node
+		"""
+		node_queue_selection = self.treeview_node_queue.get_selection()
+		pathlist = []
+		node_id_set = set()
+		node_queue_selection.selected_foreach(yh_gnome.foreach_cb, pathlist)
+		if len(pathlist) >0:
+			for i in range(len(pathlist)):
+				node_id = self.liststore_node_queue[pathlist[i][0]][0]
+				node_id_set.add(node_id)
+		
+		entry_node_id = self.xml.get_widget("entry_node_id")
+		node_id = entry_node_id.get_text()
+		node_id_set.add(node_id)
+		for node_id in node_id_set:
+			data = self.backend_ins.returnNodeStatusData(node_id)
+			if data.datetimeLs:
+				win = NodeStatusWindow(node_id=node_id, data=data)
+				win.show_all()
+	
+	def on_button_refresh_interval_clicked(self, widget, data=None):
+		"""
+		2009-11-10
+			set the refresh interval in the node_queue_app (checking status of nodes in the queue
+		"""
+		entry_checking_interval = self.xml.get_widget("entry_checking_interval")
+		self.backend_ins.checkStatusOfNodesInQueue()
+		if self.node_queue_refresh_timeout_source_id is not None:
+			gobject.source_remove(self.node_queue_refresh_timeout_source_id)
+		interval = self.getTimeInterval(entry_checking_interval.get_text())
+		self.node_queue_refresh_timeout_source_id = gobject.timeout_add(interval, self.backend_ins.checkStatusOfNodesInQueue)
+		self.on_menuitem_show_node_q_window_activate()
+	
+	def on_button_stop_node_status_refresh_clicked(self, widget, data=None):
+		"""
+		2009-11-10
+			remove the timeout function
+		"""
+		if self.node_queue_refresh_timeout_source_id is not None:
+			gobject.source_remove(self.node_queue_refresh_timeout_source_id)
+		
 if __name__ == '__main__':
 	prog = gnome.program_init('ClusterJobManager', '0.1')
 	instance = grid_job_mgr()

@@ -59,6 +59,8 @@ class hpc_cmb_pbs(object):
 		self.tmp_fname = '/tmp/job_%s'%(time.time())
 		self.getJobIDFromFullName = lambda x: int(x.split('.')[0])
 		
+		self.queue_to_check = set()	#2009-11-10	a queue storing all the node to check status periodically
+	
 	def submit_job(self, job_content, job_file_dir, job_fprefix, job_starting_number, no_of_nodes, \
 				qsub_option, ppn=None, submit_option=None, workdir=None, walltime=None, runtime_output_stdout=False,\
 				queue='cmb'):
@@ -640,6 +642,7 @@ class hpc_cmb_pbs(object):
 		try:
 			time_of_last_change = datetime.strptime(stdout_content[:19].strip(), '%Y-%m-%d %H:%M:%S')	#.%f %z for microseconds and timezone info doesn't work in python 2.5
 		except:
+			sys.stderr.write("output of stat is %s.\n"%stdout_content)
 			traceback.print_exc()
 			sys.stderr.write('%s.\n'%repr(sys.exc_info()))
 			time_of_last_change = None
@@ -1027,6 +1030,121 @@ class hpc_cmb_pbs(object):
 		commandline = 'showstart %s'%job_id
 		command_out = self.runRemoteCommand(commandline)
 		return command_out.output_stdout
+	
+	def addNodeToCheckingQueue(self, node_id):
+		"""
+		2009-11-10
+			add one node to queue_to_check
+		"""
+		node = JobDB.Node.get(node_id)	# make sure the node_id is already in db.
+		if node:
+			self.queue_to_check.add(node_id)
+			return True
+		else:
+			sys.stderr.write("Node %s not in DB.\n"%node_id)
+			return False
+	
+	def removeNodeFromCheckingQueue(self, node_id):
+		"""
+		2009-11-10
+			remove a node from queue_to_check
+		"""
+		if node_id in self.queue_to_check:
+			self.queue_to_check.remove(node_id)
+			return True
+		else:
+			sys.stderr.write("Node %s not in queue.\n"%node_id)
+			return False
+	
+	def checkStatusOfNodesInQueue(self):
+		"""
+		2009-11-10
+			update status of all nodes in queue_to_check
+		"""
+		for node_id in self.queue_to_check:
+			bad_machine_id = self.updateOneNode(machine_id=node_id, getNodeLog=True)
+			if bad_machine_id:
+				sys.stderr.wrong("Node %s is down.\n"%bad_machine_id)
+	
+	def returnQueueNodeInfo(self):
+		"""
+		2009-11-10
+			return summary info for all nodes in queue_to_check to display in a treeview 
+		"""
+		sys.stderr.write("Getting information for %s nodes in the checking queue ..."%len(self.queue_to_check))
+		list_2d = []
+		for node_id in self.queue_to_check:
+			node = JobDB.Node.get(node_id)
+			row = []
+			for var_name in self.display_node_var_name_ls:
+				row.append(getattr(node, var_name, None))
+			if node.log_ls:	#make sure it has logs
+				node_log = node.log_ls[-1]
+			else:
+				node_log = None
+			for var_name in self.display_node_log_var_name_ls:
+				label_type_tup = self.var_name2label_type.get(var_name)
+				if label_type_tup:	#if type is specified, liststore won't tolerate None
+					if label_type_tup[1]==int:
+						var_content = getattr(node_log, var_name, 0)
+						if var_content is None:
+							var_content = 0
+						row.append(var_content)
+					elif label_type_tup[1]==float:
+						var_content = getattr(node_log, var_name, 0.0)
+						if var_content is None:
+							var_content = 0.0
+						row.append(var_content)
+				else:
+					row.append(getattr(node_log, var_name, ''))
+			list_2d.append(row)
+		sys.stderr.write("Done.\n")
+		return list_2d
+	
+	memory_pattern = re.compile(r'(\d+)([kKmMgGtT][bB]).*')
+	byte_unit2Mb_ratio = {'kb':1/1024., 'mb':1, 'gb':1024, 'tb':1024*1024}
+	
+	def processMemoryStr(self, memory_str):
+		"""
+		2009-11-11
+			parse a memory string like '4321489kb' into an integer representing in the unit of Mb
+		"""
+		memory_pattern_search_result = self.memory_pattern.search(memory_str)
+		if memory_pattern_search_result:
+			memory_size, byte_unit = memory_pattern_search_result.groups()[:2]
+			byte_unit = byte_unit.lower()
+			memory_size = int(memory_size)
+			memory_size = self.byte_unit2Mb_ratio[byte_unit]*memory_size
+			return memory_size
+		return None
+	
+	def returnNodeStatusData(self, node_id):
+		"""
+		2009-11-11
+			return all status data (NodeLog) of a node stored in db
+		"""
+		sys.stderr.write("Getting status data for %s ..."%node_id)
+		
+		node = JobDB.Node.get(node_id)
+		datetimeLs = []
+		MemUsedLs = []
+		NetLoadLs = []
+		LoadAveLs = []
+		if node:
+			node_memory_in_MB = self.processMemoryStr(node.physmem)
+			for log in node.log_ls:
+				datetimeLs.append(log.date_created)
+				availmem_in_MB = self.processMemoryStr(log.availmem)
+				if node_memory_in_MB is not None and availmem_in_MB is not None:
+					memory_used = node_memory_in_MB - availmem_in_MB
+				else:
+					memory_used = -1
+				MemUsedLs.append(memory_used)
+				NetLoadLs.append(log.netload)
+				LoadAveLs.append(log.loadave)
+		returnData = PassingData(datetimeLs=datetimeLs, MemUsedLs=MemUsedLs, NetLoadLs=NetLoadLs, LoadAveLs=LoadAveLs)
+		sys.stderr.write("Done.\n")
+		return returnData
 	
 if __name__ == '__main__':
 	from pymodule import ProcessOptions

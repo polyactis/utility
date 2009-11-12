@@ -650,6 +650,25 @@
                     <property name="visible">True</property>
                     <property name="label" translatable="yes">_View</property>
                     <property name="use_underline">True</property>
+                    <child>
+                      <widget class="GtkMenu" id="menu7">
+                        <property name="visible">True</property>
+                        <child>
+                          <widget class="GtkImageMenuItem" id="menuitem_show_node_q_window">
+                            <property name="visible">True</property>
+                            <property name="tooltip" translatable="yes">the queue contains nodes to be checked every interval</property>
+                            <property name="label" translatable="yes">Show Node Queue Window</property>
+                            <property name="use_underline">True</property>
+                            <signal name="activate" handler="on_menuitem_show_node_q_window_activate"/>
+                            <child internal-child="image">
+                              <widget class="GtkImage" id="menu-item-image11">
+                                <property name="stock">gtk-missing-image</property>
+                              </widget>
+                            </child>
+                          </widget>
+                        </child>
+                      </widget>
+                    </child>
                   </widget>
                 </child>
                 <child>
@@ -794,7 +813,7 @@ cmb</property>
                   <widget class="GtkCheckButton" id="checkbutton_running">
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
-                    <property name="tooltip" translatable="yes">toggle to only show running jobs</property>
+                    <property name="tooltip" translatable="yes">toggle to show running jobs only</property>
                     <property name="label" translatable="yes">Only Running</property>
                     <property name="use_underline">True</property>
                     <property name="response_id">0</property>
@@ -808,32 +827,80 @@ cmb</property>
                   </packing>
                 </child>
                 <child>
-                  <widget class="GtkVButtonBox" id="vbuttonbox1">
+                  <widget class="GtkHBox" id="hbox23">
                     <property name="visible">True</property>
-                    <property name="spacing">7</property>
+                    <property name="border_width">2</property>
                     <child>
-                      <widget class="GtkHBox" id="hbox17">
+                      <widget class="GtkVBox" id="vbox5">
                         <property name="visible">True</property>
                         <child>
-                          <widget class="GtkButton" id="button_refresh">
+                          <widget class="GtkHBox" id="hbox24">
                             <property name="visible">True</property>
-                            <property name="can_focus">True</property>
-                            <property name="can_default">True</property>
-                            <property name="tooltip" translatable="yes">update status of all jobs</property>
-                            <property name="label" translatable="yes">Refresh</property>
-                            <property name="use_underline">True</property>
-                            <property name="response_id">0</property>
-                            <signal name="clicked" handler="on_button_refresh_clicked"/>
+                            <child>
+                              <widget class="GtkButton" id="button_refresh">
+                                <property name="visible">True</property>
+                                <property name="can_focus">True</property>
+                                <property name="can_default">True</property>
+                                <property name="tooltip" translatable="yes">update status of all jobs and reset the refreshing-interval</property>
+                                <property name="label" translatable="yes">Refresh</property>
+                                <property name="use_underline">True</property>
+                                <property name="response_id">0</property>
+                                <signal name="clicked" handler="on_button_refresh_clicked"/>
+                              </widget>
+                              <packing>
+                                <property name="expand">False</property>
+                                <property name="fill">False</property>
+                              </packing>
+                            </child>
+                            <child>
+                              <widget class="GtkEntry" id="entry_job_refresh_interval">
+                                <property name="visible">True</property>
+                                <property name="can_focus">True</property>
+                                <property name="tooltip" translatable="yes">Check status of jobs every interval (2s=2 seconds, 2m = 2 minutes, 2h, 2d, etc)</property>
+                                <property name="text" translatable="yes">30s</property>
+                              </widget>
+                              <packing>
+                                <property name="expand">False</property>
+                                <property name="position">1</property>
+                              </packing>
+                            </child>
                           </widget>
                           <packing>
-                            <property name="fill">False</property>
+                            <property name="expand">False</property>
                           </packing>
                         </child>
+                        <child>
+                          <widget class="GtkToggleButton" id="togglebutton_refresh_on_demand">
+                            <property name="visible">True</property>
+                            <property name="can_focus">True</property>
+                            <property name="receives_default">True</property>
+                            <property name="tooltip" translatable="yes">toggle to refresh jobs only when "Refresh" is pressed.</property>
+                            <property name="label" translatable="yes">Refresh on demand</property>
+                            <property name="response_id">0</property>
+                            <signal name="toggled" handler="on_togglebutton_refresh_on_demand_toggled"/>
+                          </widget>
+                          <packing>
+                            <property name="expand">False</property>
+                            <property name="fill">False</property>
+                            <property name="position">1</property>
+                          </packing>
+                        </child>
+                        <child>
+                          <placeholder/>
+                        </child>
+                      </widget>
+                      <packing>
+                        <property name="expand">False</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <widget class="GtkVBox" id="vbox6">
+                        <property name="visible">True</property>
                         <child>
                           <widget class="GtkCheckButton" id="checkbutton_update_node_info">
                             <property name="visible">True</property>
                             <property name="can_focus">True</property>
-                            <property name="tooltip" translatable="yes">check this if wanna update node information in database as well</property>
+                            <property name="tooltip" translatable="yes">check this if you want to update basic information of all nodes in the cluster in the database as well</property>
                             <property name="label" translatable="yes">Node info</property>
                             <property name="response_id">0</property>
                             <property name="draw_indicator">True</property>
@@ -841,7 +908,6 @@ cmb</property>
                           <packing>
                             <property name="expand">False</property>
                             <property name="fill">False</property>
-                            <property name="position">1</property>
                           </packing>
                         </child>
                         <child>
@@ -855,9 +921,38 @@ cmb</property>
                             <property name="draw_indicator">True</property>
                           </widget>
                           <packing>
-                            <property name="position">2</property>
+                            <property name="expand">False</property>
+                            <property name="position">1</property>
                           </packing>
                         </child>
+                        <child>
+                          <placeholder/>
+                        </child>
+                      </widget>
+                      <packing>
+                        <property name="position">1</property>
+                      </packing>
+                    </child>
+                  </widget>
+                  <packing>
+                    <property name="expand">False</property>
+                    <property name="padding">1</property>
+                    <property name="position">5</property>
+                  </packing>
+                </child>
+                <child>
+                  <widget class="GtkVButtonBox" id="vbuttonbox1">
+                    <property name="visible">True</property>
+                    <property name="spacing">7</property>
+                    <child>
+                      <widget class="GtkButton" id="button_show_node_q_window">
+                        <property name="visible">True</property>
+                        <property name="can_focus">True</property>
+                        <property name="receives_default">True</property>
+                        <property name="tooltip" translatable="yes">display the window listing all nodes that are in checking queue</property>
+                        <property name="label" translatable="yes">Show Node Queue Window</property>
+                        <property name="response_id">0</property>
+                        <signal name="clicked" handler="on_button_show_node_q_window_clicked"/>
                       </widget>
                     </child>
                     <child>
@@ -968,7 +1063,7 @@ cmb</property>
                   <packing>
                     <property name="expand">False</property>
                     <property name="fill">False</property>
-                    <property name="position">5</property>
+                    <property name="position">6</property>
                   </packing>
                 </child>
               </widget>
@@ -1274,6 +1369,334 @@ cmb</property>
           </packing>
         </child>
       </widget>
+    </child>
+  </widget>
+  <widget class="GnomeApp" id="node_queue_app">
+    <property name="title" translatable="yes">List of Nodes in the checking queue</property>
+    <child internal-child="dock">
+      <widget class="BonoboDock" id="app2-dock1">
+        <child>
+          <widget class="BonoboDockItem" id="dockitem2">
+            <property name="visible">True</property>
+            <child>
+              <widget class="GtkMenuBar" id="menubar2">
+                <property name="visible">True</property>
+                <child>
+                  <widget class="GtkMenuItem" id="menuitem5">
+                    <property name="visible">True</property>
+                    <property name="label" translatable="yes">_File</property>
+                    <property name="use_underline">True</property>
+                    <child>
+                      <widget class="GtkMenu" id="menu4">
+                        <property name="visible">True</property>
+                        <child>
+                          <widget class="GtkImageMenuItem" id="imagemenuitem11">
+                            <property name="visible">True</property>
+                            <property name="label" translatable="yes">gtk-new</property>
+                            <property name="use_underline">True</property>
+                            <property name="use_stock">True</property>
+                          </widget>
+                        </child>
+                        <child>
+                          <widget class="GtkImageMenuItem" id="imagemenuitem12">
+                            <property name="visible">True</property>
+                            <property name="label" translatable="yes">gtk-open</property>
+                            <property name="use_underline">True</property>
+                            <property name="use_stock">True</property>
+                          </widget>
+                        </child>
+                        <child>
+                          <widget class="GtkImageMenuItem" id="imagemenuitem13">
+                            <property name="visible">True</property>
+                            <property name="label" translatable="yes">gtk-save</property>
+                            <property name="use_underline">True</property>
+                            <property name="use_stock">True</property>
+                          </widget>
+                        </child>
+                        <child>
+                          <widget class="GtkImageMenuItem" id="imagemenuitem14">
+                            <property name="visible">True</property>
+                            <property name="label" translatable="yes">gtk-save-as</property>
+                            <property name="use_underline">True</property>
+                            <property name="use_stock">True</property>
+                          </widget>
+                        </child>
+                        <child>
+                          <widget class="GtkSeparatorMenuItem" id="separatormenuitem2">
+                            <property name="visible">True</property>
+                          </widget>
+                        </child>
+                        <child>
+                          <widget class="GtkImageMenuItem" id="imagemenuitem15">
+                            <property name="visible">True</property>
+                            <property name="label" translatable="yes">gtk-quit</property>
+                            <property name="use_underline">True</property>
+                            <property name="use_stock">True</property>
+                          </widget>
+                        </child>
+                      </widget>
+                    </child>
+                  </widget>
+                </child>
+                <child>
+                  <widget class="GtkMenuItem" id="menuitem6">
+                    <property name="visible">True</property>
+                    <property name="label" translatable="yes">_Edit</property>
+                    <property name="use_underline">True</property>
+                    <child>
+                      <widget class="GtkMenu" id="menu5">
+                        <property name="visible">True</property>
+                        <child>
+                          <widget class="GtkImageMenuItem" id="imagemenuitem16">
+                            <property name="visible">True</property>
+                            <property name="label" translatable="yes">gtk-cut</property>
+                            <property name="use_underline">True</property>
+                            <property name="use_stock">True</property>
+                          </widget>
+                        </child>
+                        <child>
+                          <widget class="GtkImageMenuItem" id="imagemenuitem17">
+                            <property name="visible">True</property>
+                            <property name="label" translatable="yes">gtk-copy</property>
+                            <property name="use_underline">True</property>
+                            <property name="use_stock">True</property>
+                          </widget>
+                        </child>
+                        <child>
+                          <widget class="GtkImageMenuItem" id="imagemenuitem18">
+                            <property name="visible">True</property>
+                            <property name="label" translatable="yes">gtk-paste</property>
+                            <property name="use_underline">True</property>
+                            <property name="use_stock">True</property>
+                          </widget>
+                        </child>
+                        <child>
+                          <widget class="GtkImageMenuItem" id="imagemenuitem19">
+                            <property name="visible">True</property>
+                            <property name="label" translatable="yes">gtk-delete</property>
+                            <property name="use_underline">True</property>
+                            <property name="use_stock">True</property>
+                          </widget>
+                        </child>
+                      </widget>
+                    </child>
+                  </widget>
+                </child>
+                <child>
+                  <widget class="GtkMenuItem" id="menuitem7">
+                    <property name="visible">True</property>
+                    <property name="label" translatable="yes">_View</property>
+                    <property name="use_underline">True</property>
+                  </widget>
+                </child>
+                <child>
+                  <widget class="GtkMenuItem" id="menuitem8">
+                    <property name="visible">True</property>
+                    <property name="label" translatable="yes">_Help</property>
+                    <property name="use_underline">True</property>
+                    <child>
+                      <widget class="GtkMenu" id="menu6">
+                        <property name="visible">True</property>
+                        <child>
+                          <widget class="GtkImageMenuItem" id="imagemenuitem20">
+                            <property name="visible">True</property>
+                            <property name="label" translatable="yes">gtk-about</property>
+                            <property name="use_underline">True</property>
+                            <property name="use_stock">True</property>
+                          </widget>
+                        </child>
+                      </widget>
+                    </child>
+                  </widget>
+                </child>
+              </widget>
+            </child>
+          </widget>
+          <packing>
+            <property name="behavior">BONOBO_DOCK_ITEM_BEH_EXCLUSIVE | BONOBO_DOCK_ITEM_BEH_NEVER_VERTICAL | BONOBO_DOCK_ITEM_BEH_LOCKED</property>
+          </packing>
+        </child>
+        <child>
+          <widget class="GtkHBox" id="hbox18">
+            <property name="visible">True</property>
+            <child>
+              <widget class="GtkVBox" id="vbox3">
+                <property name="visible">True</property>
+                <child>
+                  <widget class="GtkTable" id="table1">
+                    <property name="visible">True</property>
+                    <property name="n_rows">3</property>
+                    <property name="n_columns">2</property>
+                    <child>
+                      <placeholder/>
+                    </child>
+                    <child>
+                      <placeholder/>
+                    </child>
+                    <child>
+                      <widget class="GtkButton" id="button_plot_node_status">
+                        <property name="visible">True</property>
+                        <property name="can_focus">True</property>
+                        <property name="receives_default">True</property>
+                        <property name="tooltip" translatable="yes">plot status (mem, net, loadave) of the specified or selected node</property>
+                        <property name="label" translatable="yes">Plot Node Status</property>
+                        <property name="response_id">0</property>
+                        <signal name="clicked" handler="on_button_plot_node_status_clicked"/>
+                      </widget>
+                      <packing>
+                        <property name="left_attach">1</property>
+                        <property name="right_attach">2</property>
+                        <property name="top_attach">1</property>
+                        <property name="bottom_attach">2</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <widget class="GtkButton" id="button_remove_node">
+                        <property name="visible">True</property>
+                        <property name="can_focus">True</property>
+                        <property name="receives_default">True</property>
+                        <property name="tooltip" translatable="yes">remove selected node(s) from the checking queue</property>
+                        <property name="label" translatable="yes">Remove from queue</property>
+                        <property name="response_id">0</property>
+                        <signal name="clicked" handler="on_button_remove_node_clicked"/>
+                      </widget>
+                      <packing>
+                        <property name="left_attach">1</property>
+                        <property name="right_attach">2</property>
+                        <property name="top_attach">2</property>
+                        <property name="bottom_attach">3</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <widget class="GtkButton" id="button_add_node">
+                        <property name="visible">True</property>
+                        <property name="can_focus">True</property>
+                        <property name="receives_default">True</property>
+                        <property name="tooltip" translatable="yes">Add the node to the checking queue</property>
+                        <property name="label" translatable="yes">Add to queue</property>
+                        <property name="response_id">0</property>
+                        <signal name="clicked" handler="on_button_add_node_clicked"/>
+                      </widget>
+                      <packing>
+                        <property name="left_attach">1</property>
+                        <property name="right_attach">2</property>
+                        <property name="x_options">GTK_FILL</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <widget class="GtkEntry" id="entry_node_id">
+                        <property name="visible">True</property>
+                        <property name="can_focus">True</property>
+                        <property name="tooltip" translatable="yes">ID of the node</property>
+                      </widget>
+                      <packing>
+                        <property name="x_options">GTK_FILL</property>
+                        <property name="y_options">GTK_FILL</property>
+                      </packing>
+                    </child>
+                  </widget>
+                  <packing>
+                    <property name="expand">False</property>
+                    <property name="fill">False</property>
+                  </packing>
+                </child>
+                <child>
+                  <widget class="GtkHBox" id="hbox21">
+                    <property name="visible">True</property>
+                    <child>
+                      <widget class="GtkEntry" id="entry_checking_interval">
+                        <property name="visible">True</property>
+                        <property name="can_focus">True</property>
+                        <property name="tooltip" translatable="yes">Check status of nodes in the queue every interval (2s=2 seconds, 2m = 2 minutes, 2h, 2d, etc)</property>
+                        <property name="text" translatable="yes">20s</property>
+                      </widget>
+                      <packing>
+                        <property name="expand">False</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <widget class="GtkButton" id="button_refresh_interval">
+                        <property name="visible">True</property>
+                        <property name="can_focus">True</property>
+                        <property name="receives_default">True</property>
+                        <property name="tooltip" translatable="yes">set the interval to refresh node status</property>
+                        <property name="label" translatable="yes">Set Refresh Interval</property>
+                        <property name="response_id">0</property>
+                        <signal name="clicked" handler="on_button_refresh_interval_clicked"/>
+                      </widget>
+                      <packing>
+                        <property name="expand">False</property>
+                        <property name="position">1</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <widget class="GtkButton" id="button_stop_node_status_refresh">
+                        <property name="visible">True</property>
+                        <property name="can_focus">True</property>
+                        <property name="receives_default">True</property>
+                        <property name="tooltip" translatable="yes">stop the timeout function which checks the status of all nodes</property>
+                        <property name="label" translatable="yes">Stop</property>
+                        <property name="response_id">0</property>
+                        <signal name="clicked" handler="on_button_stop_node_status_refresh_clicked"/>
+                      </widget>
+                      <packing>
+                        <property name="position">2</property>
+                      </packing>
+                    </child>
+                  </widget>
+                  <packing>
+                    <property name="expand">False</property>
+                    <property name="position">1</property>
+                  </packing>
+                </child>
+                <child>
+                  <placeholder/>
+                </child>
+                <child>
+                  <placeholder/>
+                </child>
+              </widget>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">False</property>
+              </packing>
+            </child>
+            <child>
+              <widget class="GtkScrolledWindow" id="scrolledwindow7">
+                <property name="visible">True</property>
+                <property name="can_focus">True</property>
+                <property name="hscrollbar_policy">GTK_POLICY_AUTOMATIC</property>
+                <property name="vscrollbar_policy">GTK_POLICY_AUTOMATIC</property>
+                <child>
+                  <widget class="GtkTreeView" id="treeview_node_queue">
+                    <property name="visible">True</property>
+                    <property name="can_focus">True</property>
+                    <property name="headers_clickable">True</property>
+                  </widget>
+                </child>
+              </widget>
+              <packing>
+                <property name="position">1</property>
+              </packing>
+            </child>
+          </widget>
+        </child>
+      </widget>
+      <packing>
+        <property name="expand">True</property>
+        <property name="fill">True</property>
+      </packing>
+    </child>
+    <child internal-child="appbar">
+      <widget class="GnomeAppBar" id="node_queue_appbar">
+        <property name="visible">True</property>
+        <property name="spacing">4</property>
+        <property name="has_progress">True</property>
+        <property name="has_status">True</property>
+      </widget>
+      <packing>
+        <property name="position">1</property>
+      </packing>
     </child>
   </widget>
 </glade-interface>
