@@ -1065,6 +1065,7 @@ class hpc_cmb_pbs(object):
 			bad_machine_id = self.updateOneNode(machine_id=node_id, getNodeLog=True)
 			if bad_machine_id:
 				sys.stderr.wrong("Node %s is down.\n"%bad_machine_id)
+		return True	# 2009-11-19	keep the timeout function going
 	
 	def returnQueueNodeInfo(self):
 		"""

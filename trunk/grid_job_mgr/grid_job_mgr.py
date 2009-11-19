@@ -215,6 +215,7 @@ class grid_job_mgr(object):
 		if not time_unit:
 			time_unit = 's'
 		interval = self.time_unit2milliseconds[time_unit]*interval_number
+		return interval
 	
 	def on_button_refresh_clicked(self, button_refresh=None, data=None, update_job_info=None):
 		"""
@@ -234,7 +235,7 @@ class grid_job_mgr(object):
 			
 			if self.job_refresh_timeout_source_id is not None:
 				gobject.source_remove(self.job_refresh_timeout_source_id)
-			interval = self.getTimeInterval(entry_job_refresh_interval.get_text())
+			interval = self.getTimeIntervalFromStr(entry_job_refresh_interval.get_text())
 			self.job_refresh_timeout_source_id = gobject.timeout_add(interval, self.refreshJobs)
 	
 	def on_togglebutton_refresh_on_demand_toggled(self, widget, data=None):
@@ -849,7 +850,7 @@ class grid_job_mgr(object):
 		self.backend_ins.checkStatusOfNodesInQueue()
 		if self.node_queue_refresh_timeout_source_id is not None:
 			gobject.source_remove(self.node_queue_refresh_timeout_source_id)
-		interval = self.getTimeInterval(entry_checking_interval.get_text())
+		interval = self.getTimeIntervalFromStr(entry_checking_interval.get_text())
 		self.node_queue_refresh_timeout_source_id = gobject.timeout_add(interval, self.backend_ins.checkStatusOfNodesInQueue)
 		self.on_menuitem_show_node_q_window_activate()
 	
