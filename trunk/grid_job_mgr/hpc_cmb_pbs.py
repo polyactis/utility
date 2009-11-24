@@ -42,6 +42,10 @@ class hpc_cmb_pbs(object):
 							('report', 0, int):[0, 'r', 0, 'toggle report, more verbose stdout/stderr.'],\
 							}
 	def __init__(self,  **keywords):
+		"""
+		2009-11-23
+			change type of queue_to_check from set to [].
+		"""
 		from pymodule import ProcessOptions
 		self.ad = ProcessOptions.process_function_arguments(keywords, self.option_default_dict, error_doc=self.__doc__, class_to_have_attr=self)
 		
@@ -57,9 +61,22 @@ class hpc_cmb_pbs(object):
 		
 		self.mem_pattern_from_qsub_option = re.compile(r'-l mem=(?P<memory>\w*)')
 		self.tmp_fname = '/tmp/job_%s'%(time.time())
-		self.getJobIDFromFullName = lambda x: int(x.split('.')[0])
 		
-		self.queue_to_check = set()	#2009-11-10	a queue storing all the node to check status periodically
+		self.queue_to_check = []	#2009-11-10	a queue storing all the node to check status periodically
+	
+	
+	all_number_pattern = re.compile(r'^\d+$')
+	@classmethod
+	def getJobIDFromFullName(cls, full_name):
+		"""
+		2009-11-23
+			modify it to make sure full_name contains a job ID. It's "? 0" when no job is running on it.
+		"""
+		job_id = full_name.split('.')[0]
+		if cls.all_number_pattern.search(job_id):
+			return int(job_id)
+		else:
+			return None
 	
 	def submit_job(self, job_content, job_file_dir, job_fprefix, job_starting_number, no_of_nodes, \
 				qsub_option, ppn=None, submit_option=None, workdir=None, walltime=None, runtime_output_stdout=False,\
@@ -214,6 +231,8 @@ class hpc_cmb_pbs(object):
 							'rectime':int}
 	def getNodeStatus(self, node, status_value, node_state, further_check_node):
 		"""
+		2009-11-24
+			handle the situation that "jobs=? 0", which means no job is running on that node.
 		2008-11-12
 			upon type coersion failure according to nodelog_var_name2type, set the value of nodelog to None
 		2008-11-7 to cast the type for each field.
@@ -246,8 +265,11 @@ class hpc_cmb_pbs(object):
 			status_item_key, status_item_value = status_item.split('=')
 			if status_item_key=='jobs':
 				if further_check_node:	#don't check it if not further_check_node (no username's jobs on this node)
-					job_id_ls = status_item_value.split(' ')
-					job_id_ls = map(self.getJobIDFromFullName, job_id_ls)
+					job_name_ls = status_item_value.split(' ')
+					for job_name in job_name_ls:
+						job_id = self.getJobIDFromFullName(job_name)
+						if job_id is not None:
+							job_id_ls.append(job_id)
 			elif status_item_key in self.node_var_name_set:
 				setattr(node, status_item_key, status_item_value)
 			elif status_item_key in self.nodelog_var_name2type:
@@ -1033,13 +1055,19 @@ class hpc_cmb_pbs(object):
 	
 	def addNodeToCheckingQueue(self, node_id):
 		"""
+		2009-11-24
+			type of queue_to_check is changed from set to list.
 		2009-11-10
 			add one node to queue_to_check
 		"""
 		node = JobDB.Node.get(node_id)	# make sure the node_id is already in db.
 		if node:
-			self.queue_to_check.add(node_id)
-			return True
+			if node_id not in self.queue_to_check:
+				self.queue_to_check.append(node_id)
+				return True
+			else:
+				sys.stderr.write("Node %s already in checking queue.\n"%node_id)
+				return False
 		else:
 			sys.stderr.write("Node %s not in DB.\n"%node_id)
 			return False
@@ -1058,13 +1086,17 @@ class hpc_cmb_pbs(object):
 	
 	def checkStatusOfNodesInQueue(self):
 		"""
+		2009-11-24
+			check one node a time
 		2009-11-10
 			update status of all nodes in queue_to_check
 		"""
-		for node_id in self.queue_to_check:
-			bad_machine_id = self.updateOneNode(machine_id=node_id, getNodeLog=True)
-			if bad_machine_id:
-				sys.stderr.wrong("Node %s is down.\n"%bad_machine_id)
+		node_id = self.queue_to_check.pop(0)
+		#for node_id in self.queue_to_check:
+		bad_machine_id = self.updateOneNode(machine_id=node_id, getNodeLog=True)
+		if bad_machine_id:
+			sys.stderr.wrong("Node %s is down.\n"%bad_machine_id)
+		self.queue_to_check.append(node_id)
 		return True	# 2009-11-19	keep the timeout function going
 	
 	def returnQueueNodeInfo(self):
@@ -1121,6 +1153,8 @@ class hpc_cmb_pbs(object):
 	
 	def returnNodeStatusData(self, node_id):
 		"""
+		2009-11-24
+			use node.totmem rather than node.physmem
 		2009-11-11
 			return all status data (NodeLog) of a node stored in db
 		"""
@@ -1132,7 +1166,7 @@ class hpc_cmb_pbs(object):
 		NetLoadLs = []
 		LoadAveLs = []
 		if node:
-			node_memory_in_MB = self.processMemoryStr(node.physmem)
+			node_memory_in_MB = self.processMemoryStr(node.totmem)
 			for log in node.log_ls:
 				datetimeLs.append(log.date_created)
 				availmem_in_MB = self.processMemoryStr(log.availmem)
