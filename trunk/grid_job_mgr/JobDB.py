@@ -121,8 +121,8 @@ node2property = Table('node2property', __metadata__,
 """
 
 class Job2Node(Entity):
-	node = ManyToOne("Node", colname='node_name', ondelete='CASCADE', onupdate='CASCADE', primary_key=True)
-	job = ManyToOne("Job", colname='job_id', ondelete='CASCADE', onupdate='CASCADE', primary_key=True)
+	node = ManyToOne("%s.Node"%__name__, colname='node_name', ondelete='CASCADE', onupdate='CASCADE', primary_key=True)
+	job = ManyToOne("%s.Job"%__name__, colname='job_id', ondelete='CASCADE', onupdate='CASCADE', primary_key=True)
 	using_options(tablename='job2node', metadata=__metadata__, session=__session__)
 	using_table_options(mysql_engine='InnoDB')
 	
@@ -143,18 +143,15 @@ class NodeProperty(Entity):
 	using_options(tablename='node_property', metadata=__metadata__, session=__session__)
 	using_table_options(mysql_engine='InnoDB')
 
-
-
 class Node2Property(Entity):
-	node = ManyToOne("Node", colname='node_name', ondelete='CASCADE', onupdate='CASCADE', primary_key=True)
-	property = ManyToOne("NodeProperty", colname='property_name', ondelete='CASCADE', onupdate='CASCADE', primary_key=True)
+	node = ManyToOne("%s.Node"%__name__, colname='node_name', ondelete='CASCADE', onupdate='CASCADE', primary_key=True)
+	property = ManyToOne("%s.NodeProperty"%__name__, colname='property_name', ondelete='CASCADE', onupdate='CASCADE', primary_key=True)
 	using_options(tablename='node2property', metadata=__metadata__, session=__session__)
 	using_table_options(mysql_engine='InnoDB')
 
-
 class Node(Entity):
 	short_name = Field(String(512), primary_key=True)
-	properties = OneToMany("Node2Property")
+	properties = OneToMany("%s.Node2Property"%__name__)
 	#properties = ManyToMany("NodeProperty", tablename='node2property', ondelete='CASCADE', onupdate='CASCADE',
 	#					foreign_keys=lambda: [node2property.c.node_name, node2property.c.property_name],
     #    				primaryjoin=lambda: Node.short_name == node2property.c.node_name,
@@ -167,8 +164,8 @@ class Node(Entity):
 	uname = Field(Text)
 	
 	#jobs = ManyToMany('Job', tablename='job2node', ondelete='CASCADE', onupdate='CASCADE')
-	jobs = OneToMany("Job2Node")
-	log_ls = OneToMany("NodeLog")
+	jobs = OneToMany("%s.Job2Node"%__name__)
+	log_ls = OneToMany("%s.NodeLog"%__name__)
 	created_by = Field(String(200))
 	updated_by = Field(String(200))
 	date_created = Field(DateTime, default=datetime.now)
@@ -176,8 +173,37 @@ class Node(Entity):
 	using_options(tablename='node', metadata=__metadata__, session=__session__)
 	using_table_options(mysql_engine='InnoDB')
 
+class NodeQueue(Entity):
+	"""
+	2010-3-3
+		a queue holding a list of nodes for status checking
+	"""
+	node = ManyToOne("%s.Node"%__name__, colname='node_name', ondelete='CASCADE', onupdate='CASCADE')
+	queue_type = ManyToOne("%s.QueueType"%__name__, colname='queue_type_id', ondelete='CASCADE', onupdate='CASCADE')
+	created_by = Field(String(200))
+	updated_by = Field(String(200))
+	date_created = Field(DateTime, default=datetime.now)
+	date_updated = Field(DateTime)
+	using_options(tablename='node_queue', metadata=__metadata__, session=__session__)
+	using_table_options(mysql_engine='InnoDB')
+	using_table_options(UniqueConstraint('node_name', 'queue_type_id'))
+
+class QueueType(Entity):
+	"""
+	2010-3-3
+		type of queue
+	"""
+	short_name = Field(String(512), unique=True)
+	description = Field(String(8124))
+	created_by = Field(String(200))
+	updated_by = Field(String(200))
+	date_created = Field(DateTime, default=datetime.now)
+	date_updated = Field(DateTime)
+	using_options(tablename='queue_type', metadata=__metadata__, session=__session__)
+	using_table_options(mysql_engine='InnoDB')
+
 class NodeLog(Entity):
-	node = ManyToOne('Node', colname='node_id', ondelete='CASCADE', onupdate='CASCADE')
+	node = ManyToOne('%s.Node'%__name__, colname='node_id', ondelete='CASCADE', onupdate='CASCADE')
 	state = Field(String(1024))
 	nsessions = Field(Integer)
 	nusers = Field(Integer)
