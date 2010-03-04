@@ -62,8 +62,18 @@ class hpc_cmb_pbs(object):
 		self.mem_pattern_from_qsub_option = re.compile(r'-l mem=(?P<memory>\w*)')
 		self.tmp_fname = '/tmp/job_%s'%(time.time())
 		
-		self.queue_to_check = []	#2009-11-10	a queue storing all the node to check status periodically
+		# 2009-11-10	a queue storing all the node to check status periodically
+		self.queue_to_check = self.initializeQueueToCheck()
 	
+	def initializeQueueToCheck(self):
+		"""
+		2010-3-3
+			initialize queue_to_check based on db entries. called during __init__()
+		"""
+		queue_to_check = []
+		for row in JobDB.NodeQueue.query.filter_by(queue_type_id=1):	# 2010-3-3 initialize it from db
+			queue_to_check.append(row.node_name)
+		return queue_to_check
 	
 	all_number_pattern = re.compile(r'^\d+$')
 	@classmethod
@@ -1055,6 +1065,8 @@ class hpc_cmb_pbs(object):
 	
 	def addNodeToCheckingQueue(self, node_id):
 		"""
+		2010-3-3
+			add it to table JobDB.NodeQueue
 		2009-11-24
 			type of queue_to_check is changed from set to list.
 		2009-11-10
@@ -1062,7 +1074,12 @@ class hpc_cmb_pbs(object):
 		"""
 		node = JobDB.Node.get(node_id)	# make sure the node_id is already in db.
 		if node:
-			if node_id not in self.queue_to_check:
+			rows = JobDB.NodeQueue.query.filter_by(node_name=node.short_name).filter_by(queue_type_id=1)
+			if rows.count()==0:
+				node_queue = JobDB.NodeQueue(node_name=node.short_name, queue_type_id=1)
+				self.db.session.save(node_queue)
+				self.db.session.flush()
+				
 				self.queue_to_check.append(node_id)
 				return True
 			else:
@@ -1074,11 +1091,17 @@ class hpc_cmb_pbs(object):
 	
 	def removeNodeFromCheckingQueue(self, node_id):
 		"""
+		2010-3-3
+			remove it from table JobDB.NodeQueue as well
 		2009-11-10
 			remove a node from queue_to_check
 		"""
 		if node_id in self.queue_to_check:
 			self.queue_to_check.remove(node_id)
+			rows = JobDB.NodeQueue.query.filter_by(node_name=node_id).filter_by(queue_type_id=1)
+			node_queue = rows.first()
+			self.db.session.delete(node_queue)
+			self.db.session.flush()
 			return True
 		else:
 			sys.stderr.write("Node %s not in queue.\n"%node_id)
