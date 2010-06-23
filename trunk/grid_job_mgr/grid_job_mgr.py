@@ -180,6 +180,7 @@ class grid_job_mgr(object):
 		
 		self.job_refresh_timeout_source_id = None
 		self.node_queue_refresh_timeout_source_id = None
+		
 		#2008-11-05 connect stdout/stderr in the end to avoid masquerading the error output produced by bugs above
 		#sys.stdout = self.dummy_out		#2008-11-06 this will deadlocks the program sometimes when lots of stdout and stderr are being directed to it
 		#sys.stderr = self.dummy_err		
@@ -773,10 +774,11 @@ class grid_job_mgr(object):
 				showstart_output = self.backend_ins.showstartJob(job_id)
 				print showstart_output.read()
 	
-	def on_menuitem_show_node_q_window_activate(self, widget=None, data=None):
+	def displayQueueWindow(self):
 		"""
-		2009-11-10
+		2010-5-25
 			display the node_queue_app
+			split out of on_menuitem_show_node_q_window_activate() to avoid looping.
 		"""
 		if self.backend_ins is None:
 			sys.stderr.write("Backend is not selected yet! Select one.\n")
@@ -787,6 +789,16 @@ class grid_job_mgr(object):
 		list_2d = self.backend_ins.returnQueueNodeInfo()
 		yh_gnome.fill_treeview(self.treeview_node_queue, self.liststore_node_queue, list_2d, reorderable=True, multi_selection=True)
 		self.node_queue_app.show_all()
+	
+	def on_menuitem_show_node_q_window_activate(self, widget=None, data=None):
+		"""
+		2010-5-25 add the timeout function to regularly check status of nodes in the queue.
+		2009-11-10
+			display the node_queue_app
+		"""
+		self.displayQueueWindow()
+		# 2010-5-25 add the timeout function to regularly check status of nodes in the queue.
+		self.on_button_refresh_interval_clicked()
 	
 	def on_button_add_node_clicked(self, widget, data=None):
 		"""
@@ -802,7 +814,7 @@ class grid_job_mgr(object):
 		
 		entry_node_id = self.xml.get_widget("entry_node_id")
 		self.backend_ins.addNodeToCheckingQueue(entry_node_id.get_text())
-		self.on_menuitem_show_node_q_window_activate()
+		self.displayQueueWindow()
 	
 	def on_button_remove_node_clicked(self, widget, data=None):
 		"""
@@ -816,7 +828,7 @@ class grid_job_mgr(object):
 			for i in range(len(pathlist)):
 				node_id = self.liststore_node_queue[pathlist[i][0]][0]
 				self.backend_ins.removeNodeFromCheckingQueue(node_id)
-		self.on_menuitem_show_node_q_window_activate()
+		self.displayQueueWindow()
 		
 	def on_button_plot_node_status_clicked(self, widget=None, event=None, data=None):
 		"""
@@ -841,7 +853,7 @@ class grid_job_mgr(object):
 				win = NodeStatusWindow(node_id=node_id, data=data)
 				win.show_all()
 	
-	def on_button_refresh_interval_clicked(self, widget, data=None):
+	def on_button_refresh_interval_clicked(self, widget=None, data=None):
 		"""
 		2009-11-10
 			set the refresh interval in the node_queue_app (checking status of nodes in the queue
@@ -850,9 +862,12 @@ class grid_job_mgr(object):
 		self.backend_ins.checkStatusOfNodesInQueue()
 		if self.node_queue_refresh_timeout_source_id is not None:
 			gobject.source_remove(self.node_queue_refresh_timeout_source_id)
-		interval = self.getTimeIntervalFromStr(entry_checking_interval.get_text())
+		interval_str = entry_checking_interval.get_text()
+		if not interval_str:
+			interval_str = '10m'	#default is 10m
+		interval = self.getTimeIntervalFromStr(interval_str)
 		self.node_queue_refresh_timeout_source_id = gobject.timeout_add(interval, self.backend_ins.checkStatusOfNodesInQueue)
-		self.on_menuitem_show_node_q_window_activate()
+		self.displayQueueWindow()
 	
 	def on_button_stop_node_status_refresh_clicked(self, widget, data=None):
 		"""
