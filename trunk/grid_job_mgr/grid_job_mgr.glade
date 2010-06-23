@@ -857,7 +857,7 @@ cmb</property>
                                 <property name="visible">True</property>
                                 <property name="can_focus">True</property>
                                 <property name="tooltip" translatable="yes">Check status of jobs every interval (2s=2 seconds, 2m = 2 minutes, 2h, 2d, etc)</property>
-                                <property name="text" translatable="yes">30s</property>
+                                <property name="text" translatable="yes">30m</property>
                               </widget>
                               <packing>
                                 <property name="expand">False</property>
@@ -1608,7 +1608,7 @@ cmb</property>
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
                         <property name="tooltip" translatable="yes">Check status of nodes in the queue every interval (2s=2 seconds, 2m = 2 minutes, 2h, 2d, etc). one node at every interval.</property>
-                        <property name="text" translatable="yes">20s</property>
+                        <property name="text" translatable="yes">20m</property>
                       </widget>
                       <packing>
                         <property name="expand">False</property>
