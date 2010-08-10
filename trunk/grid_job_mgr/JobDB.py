@@ -34,7 +34,7 @@ from datetime import datetime
 
 from pymodule.db import ElixirDB
 
-__session__ = scoped_session(sessionmaker(autoflush=False, transactional=False))
+__session__ = scoped_session(sessionmaker(autoflush=False, autocommit=True))
 #__metadata__ = ThreadLocalMetaData()
 
 __metadata__ = MetaData()
@@ -224,7 +224,7 @@ class NodeLog(Entity):
 class ClusterJobDB(ElixirDB):
 	__doc__ = __doc__
 	option_default_dict = ElixirDB.option_default_dict.copy()
-	option_default_dict[('drivername', 1,)][0] = 'postgres'
+	option_default_dict[('drivername', 1,)][0] = 'postgresql'
 	option_default_dict[('database', 1,)][0] = 'graphdb'
 	option_default_dict[('schema', 0,)][0] = 'cluster_job'
 	option_default_dict.pop(('password', 1, ))
