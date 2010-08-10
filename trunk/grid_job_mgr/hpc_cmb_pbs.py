@@ -163,7 +163,7 @@ class hpc_cmb_pbs(object):
 						job.job_stderr_fname=os.path.join(stdout_dir,  '%s.e%s'%(job_basename, job_id))
 						
 					job.time_submitted = datetime.now()		
-					self.db.session.save_or_update(job)
+					self.db.session.add(job)
 					self.db.session.flush()
 				
 				job_starting_number += 1
@@ -385,16 +385,16 @@ class hpc_cmb_pbs(object):
 			further_check_node = 1
 		if (further_check_node or getattr(node, 'date_created', None) is None) and status_value:
 			job_id_ls, nodelog = self.getNodeStatus(node, status_value, node_state, further_check_node)
-			self.db.session.save_or_update(node)
+			self.db.session.add(node)
 			if further_check_node and nodelog:	#don't check it if not further_check_node (no username's jobs on this node)
-				self.db.session.save_or_update(nodelog)
+				self.db.session.add(nodelog)
 				self.db.session.flush()
 				if job_id2current_nodelog_id_ls:
 					for job_id in job_id_ls:
 						job_id2current_nodelog_id_ls[job_id] = nodelog.id
 		
 		elif node.ncpus and node.arch:
-			self.db.session.save_or_update(node)
+			self.db.session.add(node)
 		else:
 			bad_machine_id = machine_id
 		
@@ -644,7 +644,7 @@ class hpc_cmb_pbs(object):
 			job_log.vmem_used = job_key2value.get('resources_used.vmem')
 			job_log.walltime_used = job_key2value.get('resources_used.walltime')
 			
-			self.db.session.save_or_update(job_log)
+			self.db.session.add(job_log)
 		else:
 			is_job_completed = 1
 		
@@ -655,7 +655,7 @@ class hpc_cmb_pbs(object):
 			if job.job_stderr_fname:
 				job.job_stderr = self.fetch_file_content(job.job_stderr_fname)
 		if job.short_name is not None:
-			self.db.session.save_or_update(job)
+			self.db.session.add(job)
 		
 		self.db.session.flush()
 		if self.debug:
@@ -1077,7 +1077,7 @@ class hpc_cmb_pbs(object):
 			rows = JobDB.NodeQueue.query.filter_by(node_name=node.short_name).filter_by(queue_type_id=1)
 			if rows.count()==0:
 				node_queue = JobDB.NodeQueue(node_name=node.short_name, queue_type_id=1)
-				self.db.session.save(node_queue)
+				self.db.session.add(node_queue)
 				self.db.session.flush()
 				
 				self.queue_to_check.append(node_id)
