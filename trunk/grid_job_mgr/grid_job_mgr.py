@@ -474,6 +474,8 @@ class grid_job_mgr(object):
 	
 	def on_combobox_backend_choice_changed(self, widget, data=None):
 		"""
+		2011-4-28
+			fetch db_user, db_passwd, db_host, db_port from the GUI and pass them to backend class
 		2008-11-02
 			change the underlying backend
 		"""
@@ -483,8 +485,13 @@ class grid_job_mgr(object):
 		self.app1.set_title(self.combobox_backend_choice.get_active_text())
 		#self.app_input.set_title(self.combobox_qc_class_choice.get_active_text())
 		
-		self.backend_ins = self.backend_class_dict[self.class_chosen](db_user='crocea', cluster_username=self.entry_username.get_text(),\
-																	db_passwd='')
+		db_user = yh_gnome.getDataOutOfTextEntry(self.xml.get_widget("entry_db_username"), data_type=str,\
+												default='crocea')
+		db_passwd = yh_gnome.getDataOutOfTextEntry(self.xml.get_widget("entry_db_passwd"), data_type=str)
+		db_host = yh_gnome.getDataOutOfTextEntry(self.xml.get_widget("entry_db_host"), data_type=str)
+		db_port = yh_gnome.getDataOutOfTextEntry(self.xml.get_widget("entry_db_port"), data_type=int)
+		self.backend_ins = self.backend_class_dict[self.class_chosen](db_user=db_user, cluster_username=self.entry_username.get_text(),\
+										db_passwd=db_passwd, hostname=db_host, dbname='graphdb', schema='cluster_job', port=db_port)
 	def show_stdouterr(self, treeview, path, view_column):
 		self.on_button_check_stdouterr_clicked(treeview)
 	
