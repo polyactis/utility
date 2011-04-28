@@ -705,7 +705,7 @@
             <child>
               <widget class="GtkVBox" id="vbox1">
                 <property name="visible">True</property>
-                <property name="spacing">22</property>
+                <property name="spacing">5</property>
                 <child>
                   <widget class="GtkComboBox" id="combobox_backend_choice">
                     <property name="visible">True</property>
@@ -716,6 +716,129 @@ cmb</property>
                   </widget>
                   <packing>
                     <property name="expand">False</property>
+                  </packing>
+                </child>
+                <child>
+                  <widget class="GtkHBox" id="hbox_db_host">
+                    <property name="visible">True</property>
+                    <child>
+                      <widget class="GtkLabel" id="label_db_host">
+                        <property name="visible">True</property>
+                        <property name="label" translatable="yes">db host:</property>
+                      </widget>
+                      <packing>
+                        <property name="expand">False</property>
+                        <property name="fill">False</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <widget class="GtkEntry" id="entry_db_host">
+                        <property name="visible">True</property>
+                        <property name="can_focus">True</property>
+                        <property name="tooltip" translatable="yes">database hostname</property>
+                        <property name="invisible_char">*</property>
+                        <property name="text" translatable="yes">dl324b-1.cmb.usc.edu</property>
+                      </widget>
+                      <packing>
+                        <property name="position">1</property>
+                      </packing>
+                    </child>
+                  </widget>
+                  <packing>
+                    <property name="expand">False</property>
+                    <property name="position">1</property>
+                  </packing>
+                </child>
+                <child>
+                  <widget class="GtkHBox" id="hbox_db_port">
+                    <property name="visible">True</property>
+                    <child>
+                      <widget class="GtkLabel" id="label_db_port">
+                        <property name="visible">True</property>
+                        <property name="label" translatable="yes">db port:</property>
+                      </widget>
+                      <packing>
+                        <property name="expand">False</property>
+                        <property name="fill">False</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <widget class="GtkEntry" id="entry_db_port">
+                        <property name="visible">True</property>
+                        <property name="can_focus">True</property>
+                        <property name="tooltip" translatable="yes">database port number</property>
+                        <property name="invisible_char">*</property>
+                        <property name="text" translatable="yes">5431</property>
+                      </widget>
+                      <packing>
+                        <property name="position">1</property>
+                      </packing>
+                    </child>
+                  </widget>
+                  <packing>
+                    <property name="expand">False</property>
+                    <property name="position">2</property>
+                  </packing>
+                </child>
+                <child>
+                  <widget class="GtkHBox" id="hbox_db_username">
+                    <property name="visible">True</property>
+                    <child>
+                      <widget class="GtkLabel" id="label_db_username">
+                        <property name="visible">True</property>
+                        <property name="label" translatable="yes">db username:</property>
+                      </widget>
+                      <packing>
+                        <property name="expand">False</property>
+                        <property name="fill">False</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <widget class="GtkEntry" id="entry_db_username">
+                        <property name="visible">True</property>
+                        <property name="can_focus">True</property>
+                        <property name="tooltip" translatable="yes">db username</property>
+                        <property name="invisible_char">*</property>
+                        <property name="text" translatable="yes">yh</property>
+                      </widget>
+                      <packing>
+                        <property name="position">1</property>
+                      </packing>
+                    </child>
+                  </widget>
+                  <packing>
+                    <property name="expand">False</property>
+                    <property name="position">3</property>
+                  </packing>
+                </child>
+                <child>
+                  <widget class="GtkHBox" id="hbox_db_passwd">
+                    <property name="visible">True</property>
+                    <child>
+                      <widget class="GtkLabel" id="label_db_passwd">
+                        <property name="visible">True</property>
+                        <property name="label" translatable="yes">db password:</property>
+                      </widget>
+                      <packing>
+                        <property name="expand">False</property>
+                        <property name="fill">False</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <widget class="GtkEntry" id="entry_db_passwd">
+                        <property name="visible">False</property>
+                        <property name="can_focus">True</property>
+                        <property name="tooltip" translatable="yes">database user's password</property>
+                        <property name="invisible_char">*</property>
+                      </widget>
+                      <packing>
+                        <property name="position">1</property>
+                      </packing>
+                    </child>
+                  </widget>
+                  <packing>
+                    <property name="expand">False</property>
+                    <property name="position">4</property>
                   </packing>
                 </child>
                 <child>
@@ -745,7 +868,7 @@ cmb</property>
                   </widget>
                   <packing>
                     <property name="expand">False</property>
-                    <property name="position">1</property>
+                    <property name="position">5</property>
                   </packing>
                 </child>
                 <child>
@@ -777,7 +900,7 @@ cmb</property>
                   </widget>
                   <packing>
                     <property name="expand">False</property>
-                    <property name="position">2</property>
+                    <property name="position">6</property>
                   </packing>
                 </child>
                 <child>
@@ -806,7 +929,7 @@ cmb</property>
                   </widget>
                   <packing>
                     <property name="expand">False</property>
-                    <property name="position">3</property>
+                    <property name="position">7</property>
                   </packing>
                 </child>
                 <child>
@@ -823,7 +946,7 @@ cmb</property>
                   <packing>
                     <property name="expand">False</property>
                     <property name="fill">False</property>
-                    <property name="position">4</property>
+                    <property name="position">8</property>
                   </packing>
                 </child>
                 <child>
@@ -937,7 +1060,7 @@ cmb</property>
                   <packing>
                     <property name="expand">False</property>
                     <property name="padding">1</property>
-                    <property name="position">5</property>
+                    <property name="position">9</property>
                   </packing>
                 </child>
                 <child>
@@ -1056,7 +1179,7 @@ cmb</property>
                         <signal name="toggled" handler="on_checkbutton_redirect_stdouterr_toggled"/>
                       </widget>
                       <packing>
-                        <property name="position">6</property>
+                        <property name="position">10</property>
                       </packing>
                     </child>
                   </widget>
