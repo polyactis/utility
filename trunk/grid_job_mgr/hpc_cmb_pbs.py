@@ -26,12 +26,13 @@ from utility.SubmitJobUrwid import SubmitJobUrwid
 
 class hpc_cmb_pbs(object):
 	__doc__ = __doc__
-	option_default_dict = {('drivername', 1,):['postgres', 'v', 1, 'which type of database? mysql or postgres', ],\
+	option_default_dict = {('drivername', 1,):['postgresql', 'v', 1, 'which type of database? mysql or postgres', ],\
 							('hostname', 1, ): ['localhost', 'z', 1, 'hostname of the db server', ],\
 							('dbname', 1, ): ['graphdb', 'd', 1, 'database name', ],\
 							('schema', 0, ): ['cluster_job', 'k', 1, 'database schema name', ],\
 							('db_user', 1, ): [None, 'u', 1, 'database username', ],\
 							('db_passwd', 0, ): [None, 'p', 1, 'database password', ],\
+							('port', 0, ):[None, '', 1, 'database port number'],\
 							('job_file_dir', 0, ):['~/qjob/', '', 0, 'which directory job files are stored'],\
 							('workdir', 0, ):['~/qjob_output/', '', 0, 'which directory the file of job stdout/err is stored'],\
 							('cluster_username', 0, ):['yuhuang', '', 0, 'username on the cluster'],\
@@ -53,7 +54,7 @@ class hpc_cmb_pbs(object):
 		self.cluster_main_node = 'hpc-cmb.usc.edu'
 		self.queue_id = 'cmb'
 		self.db = JobDB.ClusterJobDB(drivername=self.drivername, username=self.db_user,
-				   password=self.db_passwd, hostname=self.hostname, database=self.dbname, schema=self.schema)
+				password=self.db_passwd, hostname=self.hostname, database=self.dbname, schema=self.schema, port=self.port)
 		self.db.setup(create_tables=False)
 		self.pbsnode_key = re.compile(r'^[\t ]*(?P<key>.*?) = ')
 			#12-20-05	? is used to do non-greedy match, for i.e.: '!Platform_description = Keywords = high density oligonucleotide array'
