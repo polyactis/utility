@@ -20,7 +20,7 @@ import gnomecanvas
 
 import gtk, gtk.glade, gobject
 
-from pymodule import yh_gnome
+from pymodule.visualize import yh_gnome
 #simport foreach_cb, create_columns, fill_treeview
 from cmb_cluster import cmb_cluster
 from hpc_cmb_pbs import hpc_cmb_pbs
@@ -44,7 +44,7 @@ class grid_job_mgr(object):
 		self.xml = xml
 		self.app1 = xml.get_widget("app1")
 		self.app1.connect("destroy", self.destroy)
-		self.app1.set_size_request(1000,800)
+		self.app1.set_size_request(1000,700)
 		
 		self.app1_appbar1 = xml.get_widget('app1_appbar1')
 		self.app1_appbar1.push('Status Message.')	#import gnome.ui has to be executed.

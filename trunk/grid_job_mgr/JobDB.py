@@ -225,10 +225,10 @@ class ClusterJobDB(ElixirDB):
 	__doc__ = __doc__
 	option_default_dict = ElixirDB.option_default_dict.copy()
 	option_default_dict[('drivername', 1,)][0] = 'postgresql'
-	option_default_dict[('database', 1,)][0] = 'graphdb'
+	option_default_dict[('dbname', 1,)][0] = 'graphdb'
 	option_default_dict[('schema', 0,)][0] = 'cluster_job'
-	option_default_dict.pop(('password', 1, ))
-	option_default_dict.update({('password', 0, ):[None, 'p', 1, 'database password', ]})
+	option_default_dict.pop(('db_passwd', 1, ))
+	option_default_dict.update({('db_passwd', 0, ):[None, 'p', 1, 'database password', ]})
 	def __init__(self, **keywords):
 		"""
 		2008-10-29
