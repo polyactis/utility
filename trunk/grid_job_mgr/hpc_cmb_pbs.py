@@ -213,7 +213,8 @@ class hpc_cmb_pbs(object):
 		"""
 		2008-11-01
 		"""
-		commandline = 'qstat %s'%(self.queue_id)
+		#commandline = 'qstat %s'%(self.queue_id)	#2011-11-5 this syntax no longer works.
+		commandline = 'qstat'
 		if username:
 			commandline += ' -u %s'%username
 		command_out = self.runRemoteCommand(commandline)
@@ -991,7 +992,7 @@ class hpc_cmb_pbs(object):
 		if job:
 			job.how_job_ended_id=how_job_ended_id
 			self.db.session.flush()
-			sys.stderr.write("Job %s (%s) marked as wrong.\n"%(job_id, job.short_name))
+			sys.stderr.write("Job %s (%s) marked as %s.\n"%(job_id, job.short_name, how_job_ended_id))
 	
 	
 	def display_node_label_type_ls(self):

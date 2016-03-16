@@ -21,7 +21,8 @@ sys.path.insert(0, os.path.expanduser('~/lib/python'))
 sys.path.insert(0, os.path.join(os.path.expanduser('~/script')))
 
 from sqlalchemy.engine.url import URL
-from elixir import Unicode, DateTime, String, Integer, UnicodeText, Text, Boolean, Float, Binary
+from elixir import Unicode, DateTime, String, Integer, UnicodeText, Text, Boolean, Float
+from elixir import LargeBinary as Binary
 from elixir import Entity, Field, using_options, using_table_options
 from elixir import OneToMany, ManyToOne, ManyToMany
 from elixir import setup_all, session, metadata, entities
@@ -225,10 +226,10 @@ class ClusterJobDB(ElixirDB):
 	__doc__ = __doc__
 	option_default_dict = ElixirDB.option_default_dict.copy()
 	option_default_dict[('drivername', 1,)][0] = 'postgresql'
-	option_default_dict[('dbname', 1,)][0] = 'graphdb'
+	option_default_dict[('database', 1,)][0] = 'graphdb'
 	option_default_dict[('schema', 0,)][0] = 'cluster_job'
-	option_default_dict.pop(('db_passwd', 1, ))
-	option_default_dict.update({('db_passwd', 0, ):[None, 'p', 1, 'database password', ]})
+	option_default_dict.pop(('password', 1, ))
+	option_default_dict.update({('password', 0, ):[None, 'p', 1, 'database password', ]})
 	def __init__(self, **keywords):
 		"""
 		2008-10-29
